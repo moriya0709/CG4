@@ -72,6 +72,9 @@ void Game::Initialize() {
 	// シーンマネージャーに最初のシーンをセット
 	SceneManager::GetInstance()->ChangeScene("TITLE");
 
+	Skybox::GetInstance()->Initialize(dxCommon, "Resource/rostock_laage_airport_4k.dds");
+	Skybox::GetInstance()->Initialize(dxCommon,"Resource/rostock_laage_airport_4k.dds");
+
 #pragma endregion
 }
 
@@ -91,6 +94,9 @@ void Game::Update() {
 	// トレイルエフェクト更新
 	TrailEffectManager::GetInstance()->UpdateAll();
 
+	// スカイボックス
+	Skybox::GetInstance()->Update();
+
 	// ImGui受付終了
 	imGuiManager->End();
 }
@@ -103,6 +109,9 @@ void Game::Draw() {
 
 	// レイマーチング描画
 	//RayMarching::GetInstance()->Draw();
+
+	// スカイボックス描画
+	Skybox::GetInstance()->Draw();
 
 	// シーンマネージャー描画(3D)
 	SceneManager::GetInstance()->Draw3D();

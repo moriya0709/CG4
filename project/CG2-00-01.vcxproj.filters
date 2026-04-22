@@ -237,6 +237,9 @@
     <ClCompile Include="application\trailEffect\TrailEffectManager.cpp">
       <Filter>ソース ファイル\application\trailEffect</Filter>
     </ClCompile>
+    <ClCompile Include="engine\3d\Skybox.cpp">
+      <Filter>ソース ファイル\engine\3d</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Resource\shaders\Object3d.PS.hlsl">
@@ -267,6 +270,12 @@
       <Filter>シェーダー ファイル</Filter>
     </FxCompile>
     <FxCompile Include="Resource\shaders\Sprite.VS.hlsl">
+      <Filter>シェーダー ファイル</Filter>
+    </FxCompile>
+    <FxCompile Include="Resource\shaders\Skybox.PS.hlsl">
+      <Filter>シェーダー ファイル</Filter>
+    </FxCompile>
+    <FxCompile Include="Resource\shaders\Skybox.VS.hlsl">
       <Filter>シェーダー ファイル</Filter>
     </FxCompile>
   </ItemGroup>
@@ -403,6 +412,9 @@
     <ClInclude Include="application\trailEffect\TrailEffectManager.h">
       <Filter>ヘッダー ファイル\application\trailEffect</Filter>
     </ClInclude>
+    <ClInclude Include="engine\3d\Skybox.h">
+      <Filter>ヘッダー ファイル\engine\3d</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt">
@@ -423,6 +435,9 @@
       <Filter>シェーダー ファイル</Filter>
     </None>
     <None Include="Resource\shaders\Sprite.hlsli">
+      <Filter>シェーダー ファイル</Filter>
+    </None>
+    <None Include="Resource\shaders\Skybox.hlsli">
       <Filter>シェーダー ファイル</Filter>
     </None>
   </ItemGroup>

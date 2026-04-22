@@ -38,7 +38,7 @@ void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, const 
 	// ★ mtlから読んだ自己発光カラーを代入！
 	materialData->emissive = modelData.material.emissive;
 
-	// ★ 追加：shininessの初期化忘れを防ぐ（適当な光沢具合を入れる）
+	// ハイライト
 	materialData->shininess = 70.0f;
 
 	materialData->fresnelColor = { 1.0f, 1.0f, 1.0f, 0.5f };
