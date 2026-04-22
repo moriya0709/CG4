@@ -74,7 +74,7 @@ private:
 
 	// ブルーム
 	float bloomThreshold = 1.0f;
-	float bloomIntensity = 2.0f;
+	float bloomIntensity = 0.0f;
 	float bloomBlurRadius = 1.0f;
 
 	// レンズフレア

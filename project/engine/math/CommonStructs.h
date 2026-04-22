@@ -1,9 +1,16 @@
 ﻿#pragma once
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "Calc.h"
 
+// 座標変換行列データ
+struct TransformationMatrix {
+    Matrix4x4 WVP;
+    Matrix4x4 World;
+    Matrix4x4 prevWVP;
+};
 // テクスチャ
 struct MaterialData {
 	std::string textureFilePath;

@@ -11,17 +11,12 @@
 
 #include "Calc.h"
 #include "RayMarching.h"
+#include "CommonStructs.h"
 
 class Model;
 class Camera;
 class DirectXCommon;
 
-// 座標変換行列データ
-struct TransformationMatrix {
-	Matrix4x4 WVP;
-	Matrix4x4 World;
-	Matrix4x4 prevWVP;
-};
 // 平行光源データ
 struct DirectionalLight {
 	Vector4 color; // ライトの色

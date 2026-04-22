@@ -18,6 +18,7 @@
 #include "TrailEffectManager.h"
 #include "SceneManager.h"
 #include "SceneFactory.h"
+#include "Skybox.h"
 
 class Game : public M_Framework {
 public:
@@ -38,4 +39,7 @@ private:
 	std::unique_ptr <ImGuiManager> imGuiManager = nullptr;
 	// シーンファクトリー
 	std::unique_ptr <SceneFactory> sceneFactory_ = nullptr;
+	// スカイボックス
+	std::unique_ptr <Skybox> skybox_ = nullptr;
+
 };
