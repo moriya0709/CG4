@@ -38,7 +38,7 @@ void Object::Initialize(Camera* camera) {
 	// 初期値
 	ambientLightData->color = { 1.0f, 1.0f, 1.0f, 1.0f };
 	ambientLightData->intensity = 1.0f;
-	ambientLightData->isDisplay = true;
+	ambientLightData->isDisplay = false;
 
 	// *ポイントライト* //
 	pointLightResource = dxCommon_->CreateBufferResource(sizeof(PointLight));
@@ -131,6 +131,7 @@ void Object::Draw() {
 	dxCommon_->GetCommandList()->SetGraphicsRootConstantBufferView(8, viewResource->GetGPUVirtualAddress());
 	// モーションブラー
 	dxCommon_->GetCommandList()->SetGraphicsRootConstantBufferView(9, motionBlurResource->GetGPUVirtualAddress());
+
 
 	// 3Dモデルが割り当てられていれば描画する
 	if (model_) {

@@ -46,4 +46,7 @@ struct Material {
     Vector4 rimColor;          // 16バイト
     float rimThreshold;        // 4バイト
     float pad3[3];             // 12バイト (隙間埋め)
+
+    std::string enviromentTexture;
+	float environmentCoefficient;
 };
