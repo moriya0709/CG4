@@ -2,6 +2,7 @@
 #include "ObjectCommon.h"
 #include "SpriteCommon.h"
 #include "SceneManager.h"
+#include "SkyBox.h"
 
 void TitleScene::Initialize() {
 
@@ -35,6 +36,9 @@ void TitleScene::Update() {
 
 	// * 3Dオブジェクト* //
 	object->Update();
+
+	// スカイボックス
+	Skybox::GetInstance()->Update();
 
 #pragma region ポストエフェクト
 	// *ポストエフェクト* //
@@ -247,6 +251,9 @@ void TitleScene::Draw2D() {
 	//sprite->Draw();
 }
 void TitleScene::Draw3D() {
+	// スカイボックス
+	Skybox::GetInstance()->Draw();
+
 	// 3Dオブジェクトの描画準備
 	ObjectCommon::GetInstance()->SetCommonPipelineState();
 

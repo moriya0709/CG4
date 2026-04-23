@@ -79,8 +79,6 @@ void Skybox::Initialize(DirectXCommon* dxCommon,std::string textureFilePath) {
 	materialData->enableLighting = false;
 	materialData->enableToonShading = false;
 	materialData->uvTransform = MakeIdentity4x4();
-	// ★ mtlから読んだ自己発光カラーを代入！
-	materialData->emissive = modelData.material.emissive;
 
 	// *座標変換行列* //
 	transformationMatrixResource = dxCommon_->CreateBufferResource(sizeof(TransformationMatrix));

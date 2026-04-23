@@ -2,6 +2,7 @@
 #include "ObjectCommon.h"
 #include "SpriteCommon.h"
 #include "SceneManager.h"
+#include "SkyBox.h"
 
 void GamePlayScene::Initialize() {
 
@@ -75,6 +76,9 @@ void GamePlayScene::Update() {
 	// *スプライト* //
 	// sprite更新
 	sprite->Update();
+
+	// スカイボックス
+	Skybox::GetInstance()->Update();
 
 #pragma region ライティング
 	// *ライティング* //
@@ -362,6 +366,9 @@ void GamePlayScene::Draw2D() {
 	//sprite->Draw();
 }
 void GamePlayScene::Draw3D() {
+	// スカイボックス
+	Skybox::GetInstance()->Draw();
+
 	// 3Dオブジェクトの描画準備
 	ObjectCommon::GetInstance()->SetCommonPipelineState();
 
