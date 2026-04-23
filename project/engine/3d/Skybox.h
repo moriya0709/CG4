@@ -34,21 +34,16 @@ private:
 	Microsoft::WRL::ComPtr <ID3D12PipelineState> graphicsPipelineState = nullptr;
 	Microsoft::WRL::ComPtr <ID3D12PipelineState> outlinePipelineState = nullptr; // アウトライン用
 
-	// Objファイルのデータ
-	ModelData modelData;
-
 	// バッファリソース
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource;
 	Microsoft::WRL::ComPtr<ID3D12Resource> materialResource;
 	Microsoft::WRL::ComPtr<ID3D12Resource> transformationMatrixResource;
-	Microsoft::WRL::ComPtr<ID3D12Resource> indexResource;
 	// バッファリソース内のデータを指すポインタ
 	VertexData* vertexData = nullptr;
 	Material* materialData = nullptr;
 	TransformationMatrix* transformationMatrixData = nullptr;
 	// バッファリソースの使い道を補足するバッファビュー
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
-	D3D12_VERTEX_BUFFER_VIEW indexBufferView;
 
 	// テクスチャパス
 	std::string textureFilePath_;
