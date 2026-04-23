@@ -20,6 +20,9 @@ public:
 	// シングルトンインスタンスの取得
 	static Skybox* GetInstance();
 
+	// getter
+	std::string GetTextureFilePath() const { return textureFilePath_; }
+
 private:
 	// ルートシグネイチャ
 	Microsoft::WRL::ComPtr <ID3D12RootSignature> rootSignature = nullptr;

@@ -18,10 +18,10 @@ void TitleScene::Initialize() {
 	// 3Dオブジェクト
 	object = std::make_unique <Object>();
 	object->Initialize(camera.get());
-	object->SetTranslate({ 0.0f, -1.0f, 0.0f });
+	object->SetTranslate({ 0.0f, 0.0f, 0.0f });
 
 	// 初期化済みの3Dオブジェクトにモデルを紐づける
-	object->SetModel("terrain.obj");
+	object->SetModel("ball.obj");
 
 	// 音声再生
 	//SoundManager::GetInstance()->Play("bgm");

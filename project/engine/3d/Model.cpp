@@ -1,6 +1,7 @@
 ﻿#include "Model.h"
 #include "DirectXCommon.h"
 #include "TextureManager.h"
+#include "SkyBox.h"
 
 void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, const std::string& directoryPath, const std::string& filename) {
 	// 引数で受け取ってメンバ変数に記録する
@@ -45,6 +46,10 @@ void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, const 
 	materialData->fresnelPower = 4.0f;
 	materialData->rimColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 	materialData->rimThreshold = 0.5f;
+	// 環境マップ用テクスチャ
+	materialData->enviromentTexture = "Resource/rostock_laage_airport_4k.dds";
+	TextureManager::GetInstance()->LoadTexture(materialData->enviromentTexture);
+	materialData->environmentCoefficient = 1.0f;
 
 	// *テクスチャ* //
 
@@ -64,7 +69,9 @@ void Model::Draw() {
 	dxCommon_->GetCommandList()->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
 	// SRVのDescriptorTableの先頭を設定。2はrootParameter[2]である。
 	dxCommon_->GetCommandList()->SetGraphicsRootDescriptorTable(2, TextureManager::GetInstance()->GetSrvHandleGPU(modelData.material.textureFilePath));
-	
+	// 環境マップ用テクスチャのセット
+	dxCommon_->GetCommandList()->SetGraphicsRootDescriptorTable(10, TextureManager::GetInstance()->GetSrvHandleGPU(materialData->enviromentTexture));
+
 	// 描画
 	dxCommon_->GetCommandList()->DrawInstanced(static_cast<UINT>(modelData.vertices.size()), 1, 0, 0);
 

@@ -16,6 +16,9 @@ struct Material
     float4 rimColor; // トゥーンON時のリムライトの色
     float rimThreshold; // リムライトの境界（0～1、値が大きいほど細くなる）
     float pad3[3]; // バイト合わせ
+    
+    int enviromentTexture;
+    float environmentCoefficient;
 };
 
 struct DirectionalLight
@@ -76,6 +79,7 @@ ConstantBuffer<ViewData> gView : register(b6); // ★追加: ビュー情報
 ConstantBuffer<MotionBlur> gMotionBlur : register(b7);
 
 Texture2D<float32_t4> gTexture : register(t0);
+TextureCube<float32_t4> gEnviromentTexture : register(t1);
 SamplerState gSampler : register(s0);
 
 PixelShaderOutput main(VertexShaderOutput input)
@@ -84,6 +88,10 @@ PixelShaderOutput main(VertexShaderOutput input)
     float4 transformedUV = mul(float32_t4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
     float32_t4 textureColor = gTexture.Sample(gSampler, transformedUV.xy);
         
+    float32_t3 cameraToPosition = normalize(input.worldPosition - gView.cameraPos);
+    float32_t3 reflectedVector = reflect(cameraToPosition, normalize(input.normal));
+    float32_t4 environmentColor = gEnviromentTexture.Sample(gSampler, reflectedVector);
+    
     if (gMaterial.enableLighting != 0)
     {
         float3 normal = normalize(input.normal);
@@ -211,8 +219,11 @@ PixelShaderOutput main(VertexShaderOutput input)
             fresnel = float4(0, 0, 0, 0);
         }
 
+        // 環境マップ
+        float4 envColor = { environmentColor.rgb * gMaterial.environmentCoefficient, 1.0f };
+        
        // ライティングの合成
-        float4 lighting = directional + directionalSpecular + ambient + pointLight + spot + fresnel;
+        float4 lighting = directional + directionalSpecular + ambient + pointLight + spot + fresnel + envColor;
         
         // ベースカラー（マテリアルカラー × テクスチャカラー）を計算
         float4 baseColor = gMaterial.color * textureColor;
