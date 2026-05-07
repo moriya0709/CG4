@@ -39,6 +39,12 @@ private:
 	   { 0.0f, 0.0f, -5.0f } // translate
 	};
 
+	Transform transformParticle{
+	   { 1.0f, 1.0f, 1.0f }, // scale
+	   { 0.0f, 0.0f, 0.0f }, // rotate
+	   { 0.0f, 0.0f, 0.0f } // translate
+	};
+
 	// *ポストエフェクト* //
 
 	// 反転
@@ -110,4 +116,6 @@ private:
 	std::unique_ptr<Camera> camera = nullptr;
 	// 3Dオブジェクト
 	std::unique_ptr <Object> object = nullptr;
+	// パーティクルエミッタ
+	std::unique_ptr <ParticleEmitter> particleEmitter = nullptr;
 };

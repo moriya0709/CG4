@@ -158,6 +158,7 @@
   <ItemGroup>
     <ClInclude Include="application\railCamera\RailCamera.h" />
     <ClInclude Include="application\rayMarching\RayMarching.h" />
+    <ClInclude Include="Blend.h" />
     <ClInclude Include="engine\scene\AbstractSceneFactory.h" />
     <ClInclude Include="engine\scene\BaseScene.h" />
     <ClInclude Include="engine\camera\Camera.h" />
