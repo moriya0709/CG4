@@ -12,6 +12,7 @@
 
 #include "Calc.h"
 #include "CommonStructs.h"
+#include "Blend.h"
 
 class DirectXCommon;
 class SrvManager;
@@ -31,6 +32,12 @@ struct Particle {
 	float currentTime;
 	Matrix4x4 wvp;
 	Matrix4x4 world;
+	float emissive;
+	Vector4 finalColor;
+	float colorChangeSpeed;
+	bool isColorChange[4];
+	bool isScaleChange[3];
+	float scaleAdd;
 };
 // 場(加速度)
 struct AccelerationField {
@@ -53,9 +60,10 @@ public:
 		Microsoft::WRL::ComPtr<ID3D12Resource> instancingResource;
 		uint32_t instancingCount;
 		ParticleForGPU* instancingData;
+		BlendMode blendMode;
 	};
 	std::unordered_map<std::string, ParticleGroup> particleGroups;
-	
+
 
 	// 初期化
 	void Initialize(DirectXCommon* dxCommon, SrvManager* srvManager, const std::string& directoryPath, const std::string& filename);
@@ -82,36 +90,38 @@ public:
 	Particle MakeNewParticleEditor(
 		std::mt19937& randomEngine,
 		const Vector3& translate,
-		std::uniform_real_distribution<float>distTransform,
-		std::uniform_real_distribution<float>distVelocity,
-		std::uniform_real_distribution<float>distTime,
-		Vector3 ifTranslate, Vector3 velocity, Vector4 color
+		const Vector3& scale,
+		const Vector3& rotate,
+		std::uniform_real_distribution<float> distPosition,
+		std::uniform_real_distribution<float>distScale,
+		std::uniform_real_distribution<float>distRotate,
+		std::uniform_real_distribution<float> distVelocity,
+		std::uniform_real_distribution<float> distTime,
+		bool isRandPosition[3], bool isRandScale[3],
+		bool isRandRotate[3], bool isRandVelocity[3], Vector4 color,
+		float emissive, Vector4 finalColor, float colorChangeSpeed,
+		bool isColorChange[3], bool isScaleChange[3], float scaleAdd
 	);
 
 	// パーティクルの発生
 	void Emit(const std::string& name,
-		const Vector3& position,uint32_t count,
-		std::uniform_real_distribution<float>distTransform,
-		std::uniform_real_distribution<float>distVelocity,
-		std::uniform_real_distribution<float>distTime,
-		Vector3 ifTranslate, Vector3 velocity, Vector4 color);
+		const Vector3& position,
+		const Vector3& scale,
+		const Vector3& rotate,
+		uint32_t count,
+		std::uniform_real_distribution<float> distPosition,
+		std::uniform_real_distribution<float>distScale,
+		std::uniform_real_distribution<float>distRotate,
+		std::uniform_real_distribution<float> distVelocity,
+		std::uniform_real_distribution<float> distTime,
+		bool isRandPosition[3], bool isRandScale[3],
+		bool isRandRotate[3], bool isRandVelocity[3], Vector4 color,
+		float emissive, BlendMode blendMode, Vector4 finalColor,
+		float colorChangeSpeed, bool isColorChange[3], bool isScaleChange[3], float scaleAdd
+	);
 
 	// シングルトンインスタンスの取得
 	static ParticleManager* GetInstance();
-
-	// setter
-	void SetColorChange(bool isColorChange[3]) {
-		for(int i = 0; i < 3; i++)
-		isColorChange_[i] = isColorChange[i]; 
-	}
-	void SetScaleChange_(bool isScaleChange[3]) {
-		for (int i = 0; i < 3; i++)
-		isScaleChange_[i] = isScaleChange[i];
-	}
-	void SetScaleAdd(float scaleAdd) { scaleAdd_ = scaleAdd;}
-	void SetFinalColor(Vector4 color) { finalColor_ = color; }
-	// 【追加】色変化の速度倍率のsetter
-	void SetColorChangeSpeed(float speed) { colorChangeSpeed_ = speed; }
 
 	ParticleManager() = default;
 	~ParticleManager() = default;
@@ -119,18 +129,6 @@ public:
 	ParticleManager& operator=(ParticleManager&) = delete;
 
 private:
-	// ブレンドモード
-	enum BlendMode {
-		kBlendModeNone,		// ブレンドなし
-		kBlendModeNormal,	// 通常ブレンド
-		kBlendModeAdd,		// 加算
-		kBlendModeSubtract,	// 減算
-		kBlendModeMultiply,	// 乗算
-		kBlendModeScreen,	// スクリーン
-		kCountOfBlendMode,	// ブレンドモードの数
-	};
-	BlendMode blendMode = kBlendModeAdd;
-
 	// シングルトンインスタンス
 	static std::unique_ptr <ParticleManager> instance;
 
@@ -144,7 +142,7 @@ private:
 	D3D12_RASTERIZER_DESC rasterizerDesc{};
 
 	// グラフィックスパイプライン
-	Microsoft::WRL::ComPtr <ID3D12PipelineState> graphicsPipelineState = nullptr;
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineStates[kCountOfBlendMode];
 
 	// Objファイルのデータ
 	ModelData modelData;
@@ -171,13 +169,6 @@ private:
 	// インスタンス数
 	const uint32_t kNumMaxInstance = 100;
 
-	// パーティクル共通データ
-	bool isColorChange_[3] = { false }; // 色変更するかどうか
-	bool isScaleChange_[3] = { false }; // スケール変更するかどうか
-	Vector4 finalColor_ = { 1.0f,1.0f,1.0f,1.0f };
-	float colorChangeSpeed_ = 1.0f; // 【追加】色変化の速度（初期値1倍）
-	float scaleAdd_ = 0.0f; // スケール変更量
-
 
 	// DirectXCommonのポインタ
 	DirectXCommon* dxCommon_ = nullptr;
@@ -186,5 +177,7 @@ private:
 	// カメラのポインタ
 	Camera* camera_ = nullptr;
 
+	// ブレンドモードに応じた D3D12_BLEND_DESC を生成して返す関数
+	D3D12_BLEND_DESC GetBlendDesc(BlendMode mode);
 };
 

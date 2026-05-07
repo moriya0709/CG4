@@ -23,6 +23,12 @@ void TitleScene::Initialize() {
 	// 初期化済みの3Dオブジェクトにモデルを紐づける
 	object->SetModel("ball.obj");
 
+	// パーティクル
+	particleEmitter = std::make_unique<ParticleEmitter>();
+	particleEmitter->Initialize("group1", transformParticle, 5, 0.1f);
+	particleEmitter->SetActive("group1");
+	particleEmitter->LoadParticle("Resource/particle/01_00.csv");
+
 	// 音声再生
 	//SoundManager::GetInstance()->Play("bgm");
 
@@ -36,6 +42,10 @@ void TitleScene::Update() {
 
 	// * 3Dオブジェクト* //
 	object->Update();
+
+	// *パーティクル* //
+	particleEmitter->Update();
+	particleEmitter->Editor();
 
 	// スカイボックス
 	Skybox::GetInstance()->Update();
@@ -252,14 +262,14 @@ void TitleScene::Draw2D() {
 }
 void TitleScene::Draw3D() {
 	// スカイボックス
-	Skybox::GetInstance()->Draw();
+	//Skybox::GetInstance()->Draw();
 
 	// 3Dオブジェクトの描画準備
 	ObjectCommon::GetInstance()->SetCommonPipelineState();
 
 	
 	// 3Dオブジェクト描画
-	object->Draw();
+	//object->Draw();
 
 
 	// アウトライン描画準備
