@@ -177,8 +177,17 @@ void ParticleManager::Draw() {
 		// パーティクルが1つ以上ある場合だけ描画
 		if (group.particles.empty()) continue;
 
-		// ★グループに設定されているブレンドモードのPSOをセット
-		dxCommon_->GetCommandList()->SetPipelineState(graphicsPipelineStates[group.blendMode].Get());
+		// ★範囲チェックとフォールバックの追加
+		uint32_t blendIndex = static_cast<uint32_t>(group.blendMode);
+		if (blendIndex >= kCountOfBlendMode) {
+			// 開発中におかしい値が入ったことに気づけるようアサートを残しつつ、
+			// リリースビルド等でクラッシュしないよう安全な値にフォールバックする
+			assert(false && "Invalid blend mode specified for particle group.");
+			blendIndex = 0; // 例: 0番目 (通常ブレンドなど) をデフォルトとする
+		}
+
+		// 安全に検証されたインデックスでPSOをセット
+		dxCommon_->GetCommandList()->SetPipelineState(graphicsPipelineStates[blendIndex].Get());
 
 		// マテリアルCBufferの場所を設定
 		dxCommon_->GetCommandList()->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());

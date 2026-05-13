@@ -130,8 +130,6 @@ void PostEffect::Initialize(DirectXCommon* dxCommon, WindowAPI* windowAPI, SrvMa
 	rtvHandles[0] = renderTarget_.rtvHandle;          // メインカラー (SV_TARGET0)
 	rtvHandles[1] = velocityRenderTarget_.rtvHandle;  // ベロシティ   (SV_TARGET1)
 
-	currentState_ = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-
 	// エフェクト
 	effectResource = dxCommon_->CreateBufferResource(sizeof(EffectData));
 	effectResource->Map(0, nullptr, reinterpret_cast<void**>(&effectData));
@@ -172,9 +170,23 @@ void PostEffect::Initialize(DirectXCommon* dxCommon, WindowAPI* windowAPI, SrvMa
 	effectData->isACES = true;                 // ACESトーンマッピングをONにする
 	effectData->caIntensity = 0.003f;          // 色収差の強さ（最初は弱めに）
 	// モーションブラー
-	effectData->isMotionBlur = true;    // モーションブラーのON/OFF
+	effectData->isMotionBlur = false;    // モーションブラーのON/OFF
 	effectData->motionBlurSamples = 8; // サンプル数（例：8〜16）
 	effectData->motionBlurScale = 1.0f;   // ブラーの強さ
+	// 色収差
+	effectData->isFullScreenCA = false; // 画面全体の色収差ON/OFF
+	effectData->fullScreenCAIntensity = 0.02f; // 画面全体の色収差の強さ
+	// ビネット
+	effectData->isVignette = false; // ビネットON/OFF
+	effectData->vignetteIntensity = 0.5f; // ビネットの強さ
+	effectData->vignetteColor = { 0.0f,0.0f,0.0f }; // ビネットの色
+	// ガウシアンフィルタ
+	effectData->isGaussianFilter = false; // ガウシアンフィルタON/OFF
+	effectData->gaussianSigma = 1.0f; // ガウシアンフィルタのぼかしの強さ
+	// アウトライン
+	effectData->isOutline = false; // アウトラインON/OFF
+	effectData->outlineThreshold = 0.1f; // エッジ判定の閾値
+	effectData->outlineColor = { 0.0f,0.0f,0.0f,1.0f }; // エッジの色
 
 	effectData->intensity = 1.0f;
 
@@ -246,6 +258,8 @@ void PostEffect::Draw() {
 	cmdList->SetGraphicsRootDescriptorTable(4, renderTarget_.srvGpuHandle); // t3: ダミー
 	cmdList->SetGraphicsRootDescriptorTable(5, dxCommon_->GetSRVGPUDescriptorHandle(depthSrvIndex_)); // t4: 深度
 	cmdList->SetGraphicsRootDescriptorTable(7, renderTarget_.srvGpuHandle); // t5: ダミー
+	D3D12_GPU_VIRTUAL_ADDRESS cloudCbAddress = RayMarching::GetInstance()->GetCloudParamGPUVirtualAddress();
+	cmdList->SetGraphicsRootConstantBufferView(8, cloudCbAddress); // b2: 太陽と雲パラメータ
 	cmdList->SetGraphicsRootDescriptorTable(9, renderTarget_.srvGpuHandle); // t6: ダミー
 
 	cmdList->DrawInstanced(3, 1, 0, 0);
@@ -286,8 +300,8 @@ void PostEffect::Draw() {
 			cmdList->SetGraphicsRootDescriptorTable(3, inputSrvX); // t2: ダミー
 			cmdList->SetGraphicsRootDescriptorTable(4, inputSrvX); // t3: ダミー
 			cmdList->SetGraphicsRootDescriptorTable(5, dxCommon_->GetSRVGPUDescriptorHandle(depthSrvIndex_)); // t4: 深度
-			cmdList->SetGraphicsRootDescriptorTable(7, inputSrvX); // t4: 深度
-			cmdList->SetGraphicsRootDescriptorTable(9, inputSrvX); // t4: 深度		
+			cmdList->SetGraphicsRootDescriptorTable(7, inputSrvX); // t5: ダミー (レンズフレア)
+			cmdList->SetGraphicsRootDescriptorTable(9, inputSrvX); // t6: ダミー (ベロシティ)
 			
 			cmdList->DrawInstanced(3, 1, 0, 0);
 			TransitionResource(bloomBuffers_[i].blurRenderTarget[0].resource.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -338,9 +352,6 @@ void PostEffect::Draw() {
 	// ★入力画像として「高輝度抽出したテクスチャ(ブルームの最初の画像)」を t0 に渡す
 	cmdList->SetGraphicsRootDescriptorTable(0, bloomBuffers_[0].lumRenderTarget.srvGpuHandle);
 
-	// ▼▼▼ ここを追加！ RayMarchingから太陽と雲のパラメータを渡す ▼▼▼
-	D3D12_GPU_VIRTUAL_ADDRESS cloudCbAddress = RayMarching::GetInstance()->GetCloudParamGPUVirtualAddress();
-
 	// 【??ポイント2：ルートパラメータのインデックス】
 	// 現在のDraw()を見ると、インデックス0～7まで使われています。
 	// b1 (SunAndCloudParam) 用に新しくルートパラメータを追加した場合、インデックスは「8」になるはずです。
@@ -382,7 +393,7 @@ void PostEffect::Draw() {
 // 描画前処理
 void PostEffect::PreDraw() {
 	// メインのバリア
-	Transition(D3D12_RESOURCE_STATE_RENDER_TARGET);
+	TransitionResource(renderTarget_.resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	// ベロシティのバリア
 	TransitionResource(velocityRenderTarget_.resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
@@ -406,7 +417,7 @@ void PostEffect::PreDraw() {
 
 // 描画後処理
 void PostEffect::PostDraw() {
-	Transition(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	TransitionResource(renderTarget_.resource.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	TransitionResource(velocityRenderTarget_.resource.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 }
 
@@ -525,22 +536,6 @@ RenderTarget PostEffect::CreateRenderTarget(
 	);
 
 	return rt;
-}
-
-// リソースバリアの発行
-void PostEffect::Transition(D3D12_RESOURCE_STATES newState) {
-	if (currentState_ == newState) return;
-
-	D3D12_RESOURCE_BARRIER barrier{};
-	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-	barrier.Transition.pResource = renderTarget_.resource.Get();
-	barrier.Transition.StateBefore = currentState_;
-	barrier.Transition.StateAfter = newState;
-	barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-
-	dxCommon_->GetCommandList()->ResourceBarrier(1, &barrier);
-
-	currentState_ = newState;
 }
 
 void PostEffect::TransitionBackBuffer(D3D12_RESOURCE_STATES newState) {

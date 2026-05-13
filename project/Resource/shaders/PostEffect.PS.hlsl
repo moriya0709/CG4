@@ -18,71 +18,99 @@ struct PSInput
 
 struct EffectData
 {
-    int isInversion; // B0
+    // [16 bytes]
+    int isInversion;
     int isGrayscale;
     int isRadialBlur;
     int isDistanceFog;
 
-    int isDOF; // B1
+    // [16 bytes]
+    int isDOF;
     int isHeightFog;
     float intensity;
     float pad0;
 
-    float2 blurCenter; // B2
+    // [16 bytes]
+    float2 blurCenter;
     float blurWidth;
     int blurSamples;
 
-    float3 distanceFogColor; // B3
+    // [16 bytes]
+    float3 distanceFogColor;
     float distanceFogStart;
 
-    float distanceFogEnd; // B4
+    // [16 bytes]
+    float distanceFogEnd;
     float zNear;
     float zFar;
     float pad1;
 
-    // *ハイトフォグ* //
-    float3 heightFogColor; // B5
+    // [16 bytes]
+    float3 heightFogColor;
     float heightFogTop;
 
-    float heightFogBottom; // B6
+    // [16 bytes]
+    float heightFogBottom;
     float heightFogDensity;
     float2 pad2;
 
-    float4x4 matInverseViewProjection; // B7-10
+    // [64 bytes]
+    float4x4 matInverseViewProjection;
 
-    // *DoF* //
-    float focusDistance; // B11
+    // [16 bytes]
+    float focusDistance;
     float focusRange;
     float bokehRadius;
     float pad3;
 
-   // *ブルーム* //
-    float bloomThreshold; // 光らせる明るさの閾値
-    float bloomIntensity; // ブルームの強さ
-    float bloomBlurRadius; // ★新規追加：ブルームのぼかし半径（広がり具合）
-    float pad4; // パディングを1つに減らす
-    
-   // *レンズフレア* //
-    int isLensFlare; // レンズフレアのON/OFF
-    int lensFlareGhostCount; // ゴーストの数
-    float lensFlareGhostDispersal; // ゴーストの広がり具合
-    float lensFlareHaloWidth; // ヘイローの大きさ
-    
-    int isACES; // ACESトーンマッピングのON/OFF
-    float caIntensity; // 色収差の強さ (0.001f とかが綺麗)
-    float2 pad5; // パディング
-    
-    // *モーションブラー* //
+    // [16 bytes]
+    float bloomThreshold;
+    float bloomIntensity;
+    float bloomBlurRadius;
+    float pad4;
+
+    // [16 bytes]
+    int isLensFlare;
+    int lensFlareGhostCount;
+    float lensFlareGhostDispersal;
+    float lensFlareHaloWidth;
+
+    // [16 bytes]
+    int isACES;
+    float caIntensity;
+    float2 pad5;
+
+    // [16 bytes]
     int isMotionBlur;
     int motionBlurSamples;
     float motionBlurScale;
     float pad6;
+
+    // [16 bytes]
+    int isFullScreenCA;
+    float fullScreenCAIntensity;
+    int isVignette;
+    float vignetteIntensity;
+
+    // [16 bytes]
+    float3 vignetteColor;
+    int isGaussianFilter;
+
+    // [16 bytes]
+    float gaussianSigma;
+    int isOutline;
+    float outlineThreshold;
+    float pad7;
+
+    // [16 bytes]
+    float4 outlineColor;
+    
 };
 ConstantBuffer<EffectData> gEffectData : register(b0);
 
 cbuffer RootConstants : register(b1)
 {
-    int gPassId; // C++から直接パス番号がねじ込まれる！
+    int gPassId;
 };
 
 struct SunAndCloudParam
@@ -101,26 +129,42 @@ struct SunAndCloudParam
 };
 ConstantBuffer<SunAndCloudParam> gSunCloudData : register(b2);
 
-// -----------------------------------------------------------
-// 魔法の道具箱（簡易的なガウスぼかし関数と、虹色を作るスペクトル関数）
-// -----------------------------------------------------------
-// テクスチャをそのままサンプリングする代わりに、この関数を使うと滑らか（円形）になる
-float3 SampleGaussian(Texture2D<float4> tex, SamplerState samp, float2 uv, float2 texelSize, float blurSigma)
+// ガウシアンフィルタ
+float3 ApplyGaussianFilter(Texture2D<float4> tex, SamplerState samp, float2 uv, float2 texelSize, float sigma)
 {
-    float3 result = 0;
-    float totalWeight = 0;
-    // 3x3の簡易ガウスカーネル
-    const float kernel[3] = { 0.227027, 0.316216, 0.070270 };
-    for (int x = -1; x <= 1; ++x)
+    float3 result = 0.0f;
+    float totalWeight = 0.0f;
+
+    // シグマが小さすぎる場合は元の色を返す（ゼロ除算防止）
+    if (sigma < 0.1f)
     {
-        for (int y = -1; y <= 1; ++y)
-        {
-            float2 offset = float2(x, y) * texelSize * blurSigma;
-            float weight = kernel[abs(x)] * kernel[abs(y)];
-            result += tex.Sample(samp, uv + offset).rgb * weight;
-            totalWeight += weight;
-        }
+        return tex.SampleLevel(samp, uv, 0).rgb;
     }
+
+    // サンプリングの最大半径（シグマの約2.5倍の範囲を取れば、ガウス分布の大部分をカバーできます）
+    float maxRadius = sigma * 2.5f;
+    float twoSigmaSquare = 2.0f * sigma * sigma;
+
+    // サンプル数（32回ならかなり高品質です。重い場合は 16 や 24 に減らしてください）
+    const int SAMPLE_COUNT = 32;
+    const float GOLDEN_ANGLE = 2.39996323f; // 黄金角 (ラジアン)
+
+    for (int i = 0; i < SAMPLE_COUNT; ++i)
+    {
+        // 円の面積に対して均等にサンプル点を配置
+        float r = sqrt((float) i / (float) SAMPLE_COUNT) * maxRadius;
+        float theta = i * GOLDEN_ANGLE;
+
+        // XYのオフセットを計算
+        float2 offset = float2(cos(theta), sin(theta)) * r * texelSize;
+
+        // 中心からの距離 r に基づくガウス重み計算
+        float weight = exp(-(r * r) / twoSigmaSquare);
+
+        result += tex.SampleLevel(samp, saturate(uv + offset), 0).rgb * weight;
+        totalWeight += weight;
+    }
+
     return result / totalWeight;
 }
 
@@ -135,7 +179,7 @@ float3 Spectrum(float t)
     return color;
 }
 
-// ACESトーンマッピング関数（簡易版：Narkowicz ACES）
+// ACESトーンマッピング関数
 float3 ACESFitted(float3 x)
 {
     float a = 2.51f;
@@ -146,8 +190,7 @@ float3 ACESFitted(float3 x)
     return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
 }
 
-// ★ 非線形・距離依存の色収差サンプリング
-//    中心から離れるほど RGB ズレが広がる（実レンズの分散特性）
+// 非線形・距離依存の色収差サンプリング
 float3 SampleWithCA(Texture2D<float4> tex, SamplerState samp,
                     float2 uv, float2 toCenter, float caIntensity)
 {
@@ -161,41 +204,67 @@ float3 SampleWithCA(Texture2D<float4> tex, SamplerState samp,
     return float3(r, g, b);
 }
 
+// 深度値を線形化（実際の距離に変換）する関数
+float LinearizeDepth(float depth, float zNear, float zFar)
+{
+    // DirectXの一般的なZバッファ(0.0～1.0)を距離に変換
+    return (zNear * zFar) / (zFar - depth * (zFar - zNear));
+}
+
+// Sobelフィルタを使って深度からエッジ（輪郭）を検出する関数（生深度バージョン）
+float DetectEdge(Texture2D<float> depthTex, SamplerState samp, float2 uv, float2 texelSize, float threshold)
+{
+    float2 offsets[9] =
+    {
+        float2(-1, -1), float2(0, -1), float2(1, -1),
+        float2(-1, 0), float2(0, 0), float2(1, 0),
+        float2(-1, 1), float2(0, 1), float2(1, 1)
+    };
+
+    float depths[9];
+    for (int i = 0; i < 9; ++i)
+    {
+        // LinearizeDepthを通さず、生のZ値(0.0～1.0)をそのまま使う
+        depths[i] = depthTex.SampleLevel(samp, saturate(uv + offsets[i] * texelSize), 0).r;
+    }
+
+    float Gx = depths[0] - depths[2] + 2.0f * depths[3] - 2.0f * depths[5] + depths[6] - depths[8];
+    float Gy = depths[0] + 2.0f * depths[1] + depths[2] - depths[6] - 2.0f * depths[7] - depths[8];
+
+    float edge = sqrt(Gx * Gx + Gy * Gy);
+
+    // 閾値を超えたら 1.0 (線)、それ以外は 0.0 とする
+    return step(threshold, edge);
+}
+
 float4 main(VSOutput input) : SV_TARGET
 {
     float4 color = gCurrentTexture.Sample(gSampler, input.uv);
     
-    // ==========================================
-    // パス1：高輝度抽出
-    // ==========================================
-    if (gPassId == 1) // ★ gPassId に変更
+    // 高輝度抽出
+    if (gPassId == 1)
     {
         float brightness = dot(color.rgb, float3(0.2126f, 0.7152f, 0.0722f));
         
-        // ★ C++から送られてくる bloomThreshold を使う！
         if (brightness > gEffectData.bloomThreshold)
         {
-            // ★ 赤ではなく、元の綺麗な色をそのまま抽出する！
             return color;
         }
         else
         {
-            // 閾値以下の暗い部分は黒にする（光らせない）
+            // 閾値以下の暗い部分は光らせない
             return float4(0.0f, 0.0f, 0.0f, 1.0f);
         }
     }
 
-    // ==========================================
-    // パス2＆3：ガウスぼかし（X方向 / Y方向）
-    // ==========================================
-    if (gPassId == 2 || gPassId == 3) // ★ gPassId に変更
+    // ガウスぼかし（X方向 / Y方向）
+    if (gPassId == 2 || gPassId == 3)
     {
         uint width, height;
       // 【修正後】一番ぼけているBloom3からサイズを取得する
         gBloom3Texture.GetDimensions(width, height);
         float2 texelSize = (width > 0 && height > 0) ? (1.0f / float2(width, height)) : float2(0.001f, 0.001f);
        
-        // ★ 修正：ここも gPassId を使うように変更
         float2 direction = (gPassId == 2) ? float2(1.0f, 0.0f) : float2(0.0f, 1.0f);
 
         // バイリニアサンプリングを利用した効率的なウェイト
@@ -205,9 +274,9 @@ float4 main(VSOutput input) : SV_TARGET
         float3 result = gCurrentTexture.Sample(gSampler, input.uv).rgb * weight[0];
         for (int i = 1; i < 3; i++)
         {
-            // ★ gEffectData.bloomBlurRadius をオフセットに掛け合わせる！
+            // gEffectData.bloomBlurRadius をオフセットに掛け合わせる！
             float2 uvOffset = direction * texelSize * offset[i] * gEffectData.bloomBlurRadius;
-            // ★ ここを修正：サンプリング位置を 0.0f〜1.0f の範囲にクランプする
+            // ここを修正：サンプリング位置を 0.0f〜1.0f の範囲にクランプする
             float2 uvSample1 = saturate(input.uv + uvOffset);
             float2 uvSample2 = saturate(input.uv - uvOffset);
             
@@ -247,9 +316,7 @@ float4 main(VSOutput input) : SV_TARGET
         float baseCAIntensity = gEffectData.caIntensity;
         float caIntensity = baseCAIntensity * lerp(1.0f, 2.0f, lerpFactor);
         
-        // -----------------------------------------------------------
         // 2. ゴーストの生成（サイズとCAを動的に変化）
-        // -----------------------------------------------------------
         int numGhosts = gEffectData.lensFlareGhostCount;
         
         if (numGhosts > 0)
@@ -264,9 +331,9 @@ float4 main(VSOutput input) : SV_TARGET
                 float baseSigma = 3.0f + (float) i * 1.5f;
                 float blurSigma = baseSigma * lerp(1.0f, 1.2f, lerpFactor);
                 
-                float r = SampleGaussian(gBloom3Texture, gSampler, saturate(offset + caOffset), texelSize, blurSigma).r;
-                float g = SampleGaussian(gBloom3Texture, gSampler, saturate(offset), texelSize, blurSigma).g;
-                float b = SampleGaussian(gBloom3Texture, gSampler, saturate(offset - caOffset), texelSize, blurSigma).b;
+                float r = ApplyGaussianFilter(gBloom3Texture, gSampler, saturate(offset + caOffset), texelSize, blurSigma).r;
+                float g = ApplyGaussianFilter(gBloom3Texture, gSampler, saturate(offset), texelSize, blurSigma).g;
+                float b = ApplyGaussianFilter(gBloom3Texture, gSampler, saturate(offset - caOffset), texelSize, blurSigma).b;
                 
                 float weight = pow(1.0f - (float(i) / max(1.0f, float(numGhosts))), 3.0f);
                 
@@ -317,18 +384,38 @@ float4 main(VSOutput input) : SV_TARGET
     // *通常描画 ＆ 最終合成* //
     if (gPassId == 0)
     {
-        // --- 既存のエフェクト処理 ---
-        // モノクロ
-        if (gEffectData.isGrayscale)
+        // 色収差
+        if (gEffectData.isFullScreenCA)
         {
-            float gray = dot(color.rgb, float3(0.2126, 0.7152, 0.0722));
-            color.rgb = float3(gray, gray, gray);
+            float2 toCenter = float2(0.5f, 0.5f) - input.uv;
+            color.rgb = SampleWithCA(gCurrentTexture, gSampler, input.uv, toCenter, gEffectData.fullScreenCAIntensity);
         }
-
-        // 色反転
-        if (gEffectData.isInversion)
+        
+        // ビネット
+        if (gEffectData.isVignette)
         {
-            color.rgb = 1.0f - color.rgb;
+            // 画面中心からの距離を計算 (中心0.0 ～ 四隅約0.707)
+            float dist = distance(input.uv, float2(0.5f, 0.5f));
+            
+            // 距離0.3〜0.8の範囲で 0.0 → 1.0 になるグラデーションを作成
+            float vignetteWeight = smoothstep(0.3f, 0.8f, dist);
+            
+            // 強さを掛ける
+            vignetteWeight *= saturate(gEffectData.vignetteIntensity);
+
+            // 合成
+            color.rgb = lerp(color.rgb, gEffectData.vignetteColor, vignetteWeight);
+        }
+        
+        // 画面全体のスムージング
+        if (gEffectData.isGaussianFilter)
+        {
+            uint width, height;
+            gCurrentTexture.GetDimensions(width, height);
+            float2 texelSize = (width > 0 && height > 0) ? (1.0f / float2(width, height)) : float2(0.001f, 0.001f);
+            
+            // 画像をぼかす
+            color.rgb = ApplyGaussianFilter(gCurrentTexture, gSampler, input.uv, texelSize, gEffectData.gaussianSigma);
         }
         
         // 放射状ブラー
@@ -404,18 +491,16 @@ float4 main(VSOutput input) : SV_TARGET
             }
         }
         
-         // =======================================================
-    // ★ モーションブラー処理
-    // =======================================================
+        // モーションブラー
         if (gEffectData.isMotionBlur)
         {
-        // 現在のピクセルの速度ベクトルを取得 (RG16Fなどを想定)
+            // 現在のピクセルの速度ベクトルを取得 (RG16Fなどを想定)
             float2 velocity = gVelocityTexture.Sample(gSampler, input.uv).rg;
         
-        // 速度のスケール調整（強すぎる場合はここで抑える）
+            // 速度のスケール調整（強すぎる場合はここで抑える）
             velocity *= gEffectData.motionBlurScale;
 
-        // 速度が極端に小さい場合は処理をスキップ（軽量化）
+            // 速度が極端に小さい場合は処理をスキップ（軽量化）
             if (length(velocity) > 0.0001f)
             {
             // サンプル1回あたりの移動量
@@ -424,23 +509,23 @@ float4 main(VSOutput input) : SV_TARGET
                 float4 accumColor = color;
                 float2 currentUV = input.uv;
 
-            // 速度ベクトルの方向に向かって複数回サンプリング
+                // 速度ベクトルの方向に向かって複数回サンプリング
                 for (int i = 1; i < gEffectData.motionBlurSamples; ++i)
                 {
                     currentUV -= texelStep;
                 
-                // 画面外のサンプリングを防ぐためのクランプ
+                    // 画面外のサンプリングを防ぐためのクランプ
                     currentUV = saturate(currentUV);
                 
                     accumColor += gCurrentTexture.Sample(gSampler, currentUV);
                 }
             
-            // 平均化
+                // 平均化
                 color = accumColor / (float) gEffectData.motionBlurSamples;
             }
         }
         
-    // 1. ブルームの加算（3つのサイズをすべて重ね合わせる）
+        // ブルームの加算
         float3 b1 = gBloom1Texture.Sample(gSampler, input.uv).rgb * 1.0f;
         float3 b2 = gBloom2Texture.Sample(gSampler, input.uv).rgb * 0.4f;
         float3 b3 = gBloom3Texture.Sample(gSampler, input.uv).rgb * 0.2f;
@@ -448,29 +533,63 @@ float4 main(VSOutput input) : SV_TARGET
         float3 totalBloom = b1 + b2 + b3;
 
       
-    // ブルーム強度を掛けて加算
+        // ブルーム強度を掛けて加算
         color.rgb += totalBloom * gEffectData.bloomIntensity;
 
-    // =======================================================
-    // ★★★ ここを追加！ レンズフレアを最終カラーに加算 ★★★
-    // =======================================================
+        // レンズフレア
         if (gEffectData.isLensFlare)
         {
-           // ★ if文の中に移動する！
             float3 lensFlare = gLensFlareTexture.Sample(gSampler, input.uv).rgb;
             color.rgb += lensFlare;
         }
 
+        // 色反転
+        if (gEffectData.isInversion)
+        {
+            color.rgb = 1.0f - color.rgb;
+        }
+        
+        // モノクロ
+        if (gEffectData.isGrayscale)
+        {
+            float gray = dot(color.rgb, float3(0.2126, 0.7152, 0.0722));
+            color.rgb = float3(gray, gray, gray);
+        }
+        
+      // 深度ベースのアウトライン (本番用・パラメータ検証)
+        if (gEffectData.isOutline)
+        {
+            uint width, height;
+            gDepthTexture.GetDimensions(width, height);
+            float2 texelSize = (width > 0 && height > 0) ? (1.0f / float2(width, height)) : float2(0.001f, 0.001f);
+
+            // 【テスト】C++からの値を一時的に無視して、確実に線が出る値を強制セットする
+            //float testThreshold = 0.0005f; // 非常に小さな閾値
+            //float4 testColor = float4(1.0f, 0.0f, 0.0f, 1.0f); // 真っ赤 ＆ 不透明(1.0f)
+
+            // gEffectData.outlineThreshold の代わりに testThreshold を使う
+            float edge = DetectEdge(
+                gDepthTexture,
+                gSampler,
+                input.uv,
+                texelSize,
+                gEffectData.outlineThreshold
+            );
+
+            // gEffectData.outlineColor の代わりに testColor を使う
+            color.rgb = lerp(color.rgb, gEffectData.outlineColor.rgb, edge * gEffectData.outlineColor.a);
+        }
+
         color.rgb *= gEffectData.intensity;
 
-    // --- 3. ACESトーンマッピングへ ---
+        // ACESトーンマッピング
         if (gEffectData.isACES)
         {
             color.rgb = ACESFitted(color.rgb);
         }
         else
         {
-        // Reinhard (指数トーンマッピング)
+            // Reinhard (指数トーンマッピング)
             float exposure = 1.0f;
             color.rgb = 1.0f - exp(-color.rgb * exposure);
         }
