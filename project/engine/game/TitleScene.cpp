@@ -24,10 +24,15 @@ void TitleScene::Initialize() {
 	object->SetModel("ball.obj");
 
 	// パーティクル
-	particleEmitter = std::make_unique<ParticleEmitter>();
-	particleEmitter->Initialize("group1", transformParticle, 5, 0.1f);
-	particleEmitter->SetActive("group1");
-	particleEmitter->LoadParticle("Resource/particle/01_00.csv");
+	particleObj = std::make_unique<ParticleEmitter>();
+	particleObj->Initialize("obj", transformParticle, 5, 0.1f);
+	particleObj->SetActive("obj");
+	particleObj->LoadParticle("Resource/particle/01_00.csv");
+
+	particleRing = std::make_unique<ParticleEmitter>();
+	particleRing->Initialize("ring", transformParticle, 5, 0.1f);
+	particleRing->SetActive("ring");
+	particleRing->LoadParticle("Resource/particle/test.csv");
 
 	// 音声再生
 	//SoundManager::GetInstance()->Play("bgm");
@@ -44,8 +49,9 @@ void TitleScene::Update() {
 	object->Update();
 
 	// *パーティクル* //
-	particleEmitter->Update();
-	particleEmitter->Editor();
+	particleObj->Update();
+	particleRing->Update();
+	particleRing->Editor();
 
 	// スカイボックス
 	Skybox::GetInstance()->Update();

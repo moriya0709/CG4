@@ -58,6 +58,7 @@ private:
 	bool isColorChange[4] = { false }; // 色変更するかどうか
 	bool isScaleChange[3] = { false }; // スケール変更するかどうか
 	float scaleAdd = 0.005f; // スケール変更量
+	Vector2 uvScale = { 1.0f, 1.0f }; // UVスケール
 
 	char fileName[20]; //パーティクルのファイル名
 
