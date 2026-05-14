@@ -41,8 +41,8 @@ void Game::Initialize() {
 	TextureManager::GetInstance()->LoadTexture("Resource/trail/trail.png");
 
 	// パーティクルマネージャ初期化
-	ParticleManager::GetInstance()->CreateParticleGroup("group1", "Resource/particle/particle.png");
-	ParticleManager::GetInstance()->CreateParticleGroup("group2", "Resource/uvChecker.png");
+	ParticleManager::GetInstance()->CreateParticleGroup("obj", "Resource/plane", "plane.obj", "Resource/particle/particle.png");
+	ParticleManager::GetInstance()->CreateParticleGroup("ring", ParticleManager::GetInstance()->Ring(), "Resource/particle/gradationLine.png");
 
 	// .objファイルからモデル読み込み
 	ModelManager::GetInstance()->LoadModel("Resource/plane","plane.obj");

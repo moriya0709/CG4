@@ -117,5 +117,6 @@ private:
 	// 3Dオブジェクト
 	std::unique_ptr <Object> object = nullptr;
 	// パーティクルエミッタ
-	std::unique_ptr <ParticleEmitter> particleEmitter = nullptr;
+	std::unique_ptr <ParticleEmitter> particleObj = nullptr;
+	std::unique_ptr <ParticleEmitter> particleRing = nullptr;
 };

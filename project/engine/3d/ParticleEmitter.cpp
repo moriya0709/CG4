@@ -33,7 +33,7 @@ void ParticleEmitter::Update() {
 			isRandVelocity,
 			color, emissive, blendMode,
 			finalColor, colorChangeSpeed,
-			isColorChange, isScaleChange, scaleAdd
+			isColorChange, isScaleChange, scaleAdd, uvScale
 		);
 
 		emitter.frequencyTime -= emitter.frequency; // 余計に過ぎた時間も紙して頻度計算する
@@ -58,7 +58,7 @@ void ParticleEmitter::Emit() {
 		isRandVelocity,
 		color, emissive, blendMode,
 		finalColor, colorChangeSpeed,
-		isColorChange, isScaleChange, scaleAdd
+		isColorChange, isScaleChange, scaleAdd, uvScale
 	);
 
 }
@@ -342,6 +342,8 @@ void ParticleEmitter::Editor() {
 	ImGui::SliderFloat2("distVelocity", (float*)&distVelocity, -100.0f, 100.0f);
 	// パーティクルのサイズ追加数
 	ImGui::SliderFloat("scaleAdd", &scaleAdd, -0.1f, 0.1f);
+	// uvスケール
+	ImGui::SliderFloat2("uvScale", (float*)&uvScale, 0.0f, 10.0f);
 
 	// ファイル名
 	ImGui::InputText("FileName", fileName, IM_ARRAYSIZE(fileName));
