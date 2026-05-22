@@ -30,8 +30,8 @@ void TitleScene::Initialize() {
 	particleObj->LoadParticle("Resource/particle/01_00.csv");
 
 	particleRing = std::make_unique<ParticleEmitter>();
-	particleRing->Initialize("ring", transformParticle, 5, 0.1f);
-	particleRing->SetActive("ring");
+	particleRing->Initialize("cylinder", transformParticle, 5, 0.1f);
+	particleRing->SetActive("cylinder");
 	particleRing->LoadParticle("Resource/particle/test.csv");
 
 	// 音声再生

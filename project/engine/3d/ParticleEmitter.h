@@ -46,7 +46,7 @@ private:
 	std::uniform_real_distribution<float> distScale; // ランダムなスケール範囲
 	std::uniform_real_distribution<float> distRotate; // ランダムな回転範囲
 	std::uniform_real_distribution<float> distVelocity; // ランダムな速度範囲
-	std::uniform_real_distribution<float> distTime = std::uniform_real_distribution(1.0f, 3.0f); // ランダムな寿命範囲
+	std::uniform_real_distribution<float> distTime; // ランダムな寿命範囲
 	bool isRandPosition[3] = { true }; // ランダムな座標にするかどうか
 	bool isRandScale[3] = { true }; // ランダムなスケールにするかどうか
 	bool isRandRotate[3] = { true }; // ランダムな回転にするかどうか
@@ -59,6 +59,8 @@ private:
 	bool isScaleChange[3] = { false }; // スケール変更するかどうか
 	float scaleAdd = 0.005f; // スケール変更量
 	Vector2 uvScale = { 1.0f, 1.0f }; // UVスケール
+	Vector2 uvScrollSpeed = { 0.1f, 0.0f }; // UVスクロール速度
+	Vector2 uvOffset = { 0.0f, 0.0f }; // UVオフセット
 
 	char fileName[20]; //パーティクルのファイル名
 

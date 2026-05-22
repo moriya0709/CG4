@@ -33,7 +33,7 @@ void ParticleEmitter::Update() {
 			isRandVelocity,
 			color, emissive, blendMode,
 			finalColor, colorChangeSpeed,
-			isColorChange, isScaleChange, scaleAdd, uvScale
+			isColorChange, isScaleChange, scaleAdd, uvScale, uvScrollSpeed, uvOffset
 		);
 
 		emitter.frequencyTime -= emitter.frequency; // 余計に過ぎた時間も紙して頻度計算する
@@ -58,7 +58,8 @@ void ParticleEmitter::Emit() {
 		isRandVelocity,
 		color, emissive, blendMode,
 		finalColor, colorChangeSpeed,
-		isColorChange, isScaleChange, scaleAdd, uvScale
+		isColorChange, isScaleChange, scaleAdd, uvScale,
+		uvScrollSpeed, uvOffset
 	);
 
 }
@@ -108,6 +109,8 @@ void ParticleEmitter::SaveParticle(const std::string& filePath) {
 	file << distRotate.a() << "," << distRotate.b() << "\n";
 	// パーティクルの速度範囲
 	file << distVelocity.a() << "," << distVelocity.b() << "\n";
+	// パーティクルの寿命範囲
+	file << distTime.a() << "," << distTime.b() << "\n";
 	// パーティクルのサイズ追加数
 	file << scaleAdd << "\n";
 	// エミッシブ
@@ -249,6 +252,13 @@ void ParticleEmitter::LoadParticle(const std::string& filePath) {
 		distVelocity = std::uniform_real_distribution<float>(a, b);
 	}
 
+	// 寿命範囲
+	if (std::getline(file, line)) {
+		float a, b;
+		sscanf_s(line.c_str(), "%f,%f", &a, &b);
+		distTime = std::uniform_real_distribution<float>(a, b);
+	}
+
 	// サイズ追加数
 	if (std::getline(file, line)) {
 		scaleAdd = std::stof(line);
@@ -274,6 +284,8 @@ void ParticleEmitter::Editor() {
 	ImGui::DragFloat3("translate", &emitter.transform.translate.x, 0.01f, -100.0f, 100.0f);
 	// パーティクルのスケール変更
 	ImGui::DragFloat3("scale", &emitter.transform.scale.x, 0.01f, -100.0f, 100.0f);
+	// パーティクルの回転変更
+	ImGui::DragFloat3("rotate", &emitter.transform.rotate.x, 0.1f, 0.0f, 3.14f);
 
 	// パーティクルの状態
 	if (ImGui::Button("FIRE", ImVec2(50, 50))) {
@@ -340,6 +352,8 @@ void ParticleEmitter::Editor() {
 	ImGui::SliderFloat2("distRotate", (float*)&distRotate, -360.0f, 360.0f);
 	// パーティクルの速度範囲
 	ImGui::SliderFloat2("distVelocity", (float*)&distVelocity, -100.0f, 100.0f);
+	// 寿命範囲
+	ImGui::SliderFloat2("distTime", (float*)&distTime, 0.0f, 10.0f);
 	// パーティクルのサイズ追加数
 	ImGui::SliderFloat("scaleAdd", &scaleAdd, -0.1f, 0.1f);
 	// uvスケール
