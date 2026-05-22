@@ -43,6 +43,7 @@ void Game::Initialize() {
 	// パーティクルマネージャ初期化
 	ParticleManager::GetInstance()->CreateParticleGroup("obj", "Resource/plane", "plane.obj", "Resource/particle/particle.png");
 	ParticleManager::GetInstance()->CreateParticleGroup("ring", ParticleManager::GetInstance()->Ring(), "Resource/particle/gradationLine.png");
+	ParticleManager::GetInstance()->CreateParticleGroup("cylinder", ParticleManager::GetInstance()->Cylinder(), "Resource/particle/gradationLine.png");
 
 	// .objファイルからモデル読み込み
 	ModelManager::GetInstance()->LoadModel("Resource/plane","plane.obj");
@@ -105,7 +106,7 @@ void Game::Draw() {
 	PostEffect::GetInstance()->PreDraw();
 
 	// レイマーチング描画
-	//RayMarching::GetInstance()->Draw();
+	RayMarching::GetInstance()->Draw();
 
 	// シーンマネージャー描画(3D)
 	SceneManager::GetInstance()->Draw3D();

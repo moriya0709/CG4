@@ -39,6 +39,8 @@ struct Particle {
 	bool isScaleChange[3];
 	float scaleAdd;
 	Vector2 uvScale;
+	Vector2 uvOffset;       // ★追加: 現在のUVのズレ（移動量）
+	Vector2 uvScrollSpeed;  // ★追加: 1秒間に進むUVスクロールの速さ
 };
 // 場(加速度)
 struct AccelerationField {
@@ -51,7 +53,7 @@ struct ParticleForGPU {
 	Matrix4x4 world;     // 64バイト
 	Vector4 color;       // 16バイト
 	Vector2 uvScale;     // 8バイト
-	Vector2 padding;    // ★追加: 合計160バイト（16の倍数）に合わせるためのダミー
+	Vector2 uvOffset;
 };
 
 class ParticleManager {
@@ -114,7 +116,7 @@ public:
 		bool isRandRotate[3], bool isRandVelocity[3], Vector4 color,
 		float emissive, Vector4 finalColor, float colorChangeSpeed,
 		bool isColorChange[4], bool isScaleChange[3], 
-		float scaleAdd, Vector2 uvScale
+		float scaleAdd, Vector2 uvScale, Vector2 uvScrollSpeed, Vector2 uvOffset
 	);
 
 	// パーティクルの発生
@@ -132,7 +134,7 @@ public:
 		bool isRandRotate[3], bool isRandVelocity[3], Vector4 color,
 		float emissive, BlendMode blendMode, Vector4 finalColor,
 		float colorChangeSpeed, bool isColorChange[4], bool isScaleChange[3], 
-		float scaleAdd, Vector2 uvScale
+		float scaleAdd, Vector2 uvScale, Vector2 uvScrollSpeed, Vector2 uvOffset
 	);
 
 	// OBJファイルからグループを作成
@@ -142,6 +144,8 @@ public:
 
 	// リング状の頂点データを生成する関数
 	std::vector<VertexData> Ring();
+	// 円柱上の頂点データを生成すｓる関数
+	std::vector<VertexData> Cylinder();
 
 	// シングルトンインスタンスの取得
 	static ParticleManager* GetInstance();
@@ -189,9 +193,11 @@ private:
 	// デルタタイム(60fps固定)
 	const float kDeltaTime = 1.0f / 60.0f;
 
+	// ビルボード化
+	bool isBillboard = false;
+
 	// インスタンス数
 	const uint32_t kNumMaxInstance = 100;
-
 
 	// DirectXCommonのポインタ
 	DirectXCommon* dxCommon_ = nullptr;

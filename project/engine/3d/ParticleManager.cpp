@@ -135,13 +135,24 @@ void ParticleManager::Update() {
 					it->transform.scale.z = 0.0f;
 			}
 
+			// UVスクロール
+			it->uvOffset.x += it->uvScrollSpeed.x * kDeltaTime;
+			it->uvOffset.y += it->uvScrollSpeed.y * kDeltaTime;
+
 			it->currentTime += kDeltaTime;
 
 			Matrix4x4 scale = MakeScaleMatrix(it->transform.scale);
 			Matrix4x4 translate = MakeTranslateMatrix(it->transform.translate);
 			Matrix4x4 rotateX = MakeRotateXMatrix(it->transform.rotate.x);
-			Matrix4x4 rotateY = MakeRotateZMatrix(it->transform.rotate.z);
-			Matrix4x4 rotate = Multiply(Multiply(rotateX, rotateY), billboardMatrix);
+			Matrix4x4 rotateY = MakeRotateYMatrix(it->transform.rotate.y);
+			Matrix4x4 rotateZ = MakeRotateZMatrix(it->transform.rotate.z);
+			Matrix4x4 rotate;
+			if (isBillboard)
+				rotate = Multiply(Multiply(rotateX, rotateY), billboardMatrix);
+			else
+				rotate = Multiply(Multiply(rotateX, rotateY), rotateZ);
+
+			
 			Matrix4x4 world = Multiply(Multiply(scale, rotate), translate);
 
 			// 取得した activeCamera からビュープロジェクション行列をもらう
@@ -154,6 +165,7 @@ void ParticleManager::Update() {
 			mapped[index].color.z = it->color.z * it->emissive;
 			mapped[index].color.w = it->color.w;
 			mapped[index].uvScale = it->uvScale;
+			mapped[index].uvOffset = it->uvOffset;
 
 			++index;
 			++it;
@@ -485,7 +497,7 @@ Particle ParticleManager::MakeNewParticleEditor(
 	bool isRandRotate[3], bool isRandVelocity[3], Vector4 color,
 	float emissive, Vector4 finalColor, float colorChangeSpeed,
 	bool isColorChange[4], bool isScaleChange[3], 
-	float scaleAdd, Vector2 uvScale
+	float scaleAdd, Vector2 uvScale,Vector2 uvScrollSpeed, Vector2 uvOffset
 ) {
 	Particle particle;
 	
@@ -539,8 +551,10 @@ Particle ParticleManager::MakeNewParticleEditor(
 	particle.isScaleChange[2] = isScaleChange[2];
 	// サイズの変化量
 	particle.scaleAdd = scaleAdd;
-	// UVスケール
+	// UV
 	particle.uvScale = uvScale;
+	particle.uvOffset = uvOffset;
+	particle.uvScrollSpeed = uvScrollSpeed;
 
 	return particle;
 }
@@ -561,7 +575,7 @@ void ParticleManager::Emit(
 	bool isRandRotate[3], bool isRandVelocity[3], Vector4 color,
 	float emissive, BlendMode blendMode, Vector4 finalColor,
 	float colorChangeSpeed, bool isColorChange[4], bool isScaleChange[3],
-	float scaleAdd, Vector2 uvScale
+	float scaleAdd, Vector2 uvScale, Vector2 uvScrollSpeed, Vector2 uvOffset
 ) {
 	assert(particleGroups.count(name));
 
@@ -579,7 +593,7 @@ void ParticleManager::Emit(
 				distPosition, distScale, distRotate, distVelocity, distTime,
 				isRandPosition, isRandScale, isRandRotate, isRandVelocity,
 				color, emissive, finalColor, colorChangeSpeed,
-				isColorChange, isScaleChange, scaleAdd, uvScale));
+				isColorChange, isScaleChange, scaleAdd, uvScale, uvScrollSpeed, uvOffset));
 	}
 }
 
@@ -711,6 +725,53 @@ std::vector<VertexData> ParticleManager::Ring() {
 	}
 
 	return vertices;
+}
+
+std::vector<VertexData> ParticleManager::Cylinder() {
+	std::vector<VertexData> vertices;
+
+	const uint32_t kCyliderDivide = 32;
+	const float kTopRadius = 1.0f;
+	const float kBottomRadius = 1.0f;
+	const float kHeight = 1.0f;
+	const float radianPerDivide = 2.0f * std::numbers::pi_v<float> / float(kCyliderDivide);
+
+	for (uint32_t index = 0; index < kCyliderDivide; ++index) {
+		float sin = std::sin(index * radianPerDivide);
+		float cos = std::cos(index * radianPerDivide);
+		float sinNext = std::sin((index + 1) * radianPerDivide);
+		float cosNext = std::cos((index + 1) * radianPerDivide);
+		float u = float(index) / float(kCyliderDivide);
+		float uNext = float(index + 1) / float(kCyliderDivide);
+
+		// ★修正: 法線はY成分が0、Z成分がcosになります。
+		// （滑らかなライティングにするため、CurrentとNextで法線を分けます）
+		Vector3 normalCurrent = { -sin, 0.0f, cos };
+		Vector3 normalNext = { -sinNext, 0.0f, cosNext };
+
+		// ① 上面・現在の頂点 (Top-Left)
+		VertexData v1 = { { -sin * kTopRadius, kHeight, cos * kTopRadius, 1.0f }, { u, 0.0f }, normalCurrent };
+		// ② 上面・次の頂点 (Top-Right)
+		VertexData v2 = { { -sinNext * kTopRadius, kHeight, cosNext * kTopRadius, 1.0f }, { uNext, 0.0f }, normalNext };
+		// ③ 底面・現在の頂点 (Bottom-Left)
+		VertexData v3 = { { -sin * kBottomRadius, 0.0f, cos * kBottomRadius, 1.0f }, { u, 1.0f }, normalCurrent };
+		// ④ 底面・次の頂点 (Bottom-Right) ★修正: sinNext, cosNextを使う
+		VertexData v4 = { { -sinNext * kBottomRadius, 0.0f, cosNext * kBottomRadius, 1.0f }, { uNext, 1.0f }, normalNext };
+
+		// 1区画につき2つの三角形（合計6頂点）を「時計回り」になるように追加する
+		// 三角形1: ① (左上) -> ③ (左下) -> ② (右上)
+		vertices.push_back(v1);
+		vertices.push_back(v3);
+		vertices.push_back(v2);
+
+		// 三角形2: ② (右上) -> ③ (左下) -> ④ (右下)
+		vertices.push_back(v2);
+		vertices.push_back(v3);
+		vertices.push_back(v4);
+	}
+
+	return vertices;
+
 }
 
 // シングルトンインスタンスの取得
