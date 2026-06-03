@@ -7,6 +7,9 @@
 #include <cassert>
 #include <wrl.h>
 #include <dxcapi.h>
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
 
 #include "Calc.h"
 #include "CommonStructs.h"

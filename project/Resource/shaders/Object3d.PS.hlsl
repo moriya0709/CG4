@@ -223,7 +223,7 @@ PixelShaderOutput main(VertexShaderOutput input)
         // 環境マップ
         float4 envColor = { environmentColor.rgb * gMaterial.environmentCoefficient, 1.0f };
         
-       // ライティングの合成
+        // ライティングの合成
         float4 lighting = directional + directionalSpecular + ambient + pointLight + spot + fresnel + envColor;
         
         // ベースカラー（マテリアルカラー × テクスチャカラー）を計算
