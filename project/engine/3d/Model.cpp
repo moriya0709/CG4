@@ -47,8 +47,8 @@ void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, const 
 	materialData->rimColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 	materialData->rimThreshold = 0.5f;
 	// 環境マップ用テクスチャ
-	materialData->enviromentTexture = "Resource/rostock_laage_airport_4k.dds";
-	TextureManager::GetInstance()->LoadTexture(materialData->enviromentTexture);
+	enviromentTexture = "Resource/rostock_laage_airport_4k.dds";
+	TextureManager::GetInstance()->LoadTexture(enviromentTexture);
 	materialData->environmentCoefficient = 1.0f;
 
 	// *テクスチャ* //
@@ -70,7 +70,7 @@ void Model::Draw() {
 	// SRVのDescriptorTableの先頭を設定。2はrootParameter[2]である。
 	dxCommon_->GetCommandList()->SetGraphicsRootDescriptorTable(2, TextureManager::GetInstance()->GetSrvHandleGPU(modelData.material.textureFilePath));
 	// 環境マップ用テクスチャのセット
-	dxCommon_->GetCommandList()->SetGraphicsRootDescriptorTable(10, TextureManager::GetInstance()->GetSrvHandleGPU(materialData->enviromentTexture));
+	dxCommon_->GetCommandList()->SetGraphicsRootDescriptorTable(10, TextureManager::GetInstance()->GetSrvHandleGPU(enviromentTexture));
 
 	// 描画
 	dxCommon_->GetCommandList()->DrawInstanced(static_cast<UINT>(modelData.vertices.size()), 1, 0, 0);

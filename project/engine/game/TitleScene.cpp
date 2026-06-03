@@ -268,7 +268,7 @@ void TitleScene::Draw2D() {
 }
 void TitleScene::Draw3D() {
 	// スカイボックス
-	//Skybox::GetInstance()->Draw();
+	Skybox::GetInstance()->Draw();
 
 	// 3Dオブジェクトの描画準備
 	ObjectCommon::GetInstance()->SetCommonPipelineState();
