@@ -11,15 +11,18 @@ struct Material
     float shininess;
 
     // フレネル反射 / リムライト関連
-    float4 fresnelColor; // トゥーンOFF時のフレネル反射の色
-    float fresnelPower; // フレネル反射の累乗数（値が大きいほどエッジに寄る）
-    float pad2[3];
+    float4 fresnelColor;
+    float fresnelPower;
+    float3 pad2; // HLSLでは float pad2[3] ではなく float3 でOK
+
+    float4 rimColor;
+    float rimThreshold;
+    float3 pad3;
     
-    float4 rimColor; // トゥーンON時のリムライトの色
-    float rimThreshold; // リムライトの境界（0～1、値が大きいほど細くなる）
-    float pad3[3]; // バイト合わせ
+    // ★ enviromentTexture を削除
     
     float environmentCoefficient;
+    float3 pad4; // 末尾のパディング
 };
 
 struct DirectionalLight
@@ -223,7 +226,7 @@ PixelShaderOutput main(VertexShaderOutput input)
         // 環境マップ
         float4 envColor = { environmentColor.rgb * gMaterial.environmentCoefficient, 1.0f };
         
-       // ライティングの合成
+        // ライティングの合成
         float4 lighting = directional + directionalSpecular + ambient + pointLight + spot + fresnel + envColor;
         
         // ベースカラー（マテリアルカラー × テクスチャカラー）を計算

@@ -31,22 +31,24 @@ struct ModelData {
 };
 // マテリアルデータ
 struct Material {
-    Vector4 color;             // 16バイト
-    int32_t enableLighting;    // 4バイト (★boolではなく必ずint32_tにする)
-    int32_t enableToonShading; // 4バイト (★boolではなく必ずint32_tにする)
-    Vector2 pad1;              // 8バイト (隙間埋め)
-    Matrix4x4 uvTransform;     // 64バイト
-    Vector3 emissive;          // 12バイト (★ここに10.29が入る)
-    float shininess;           // 4バイト
+    Vector4 color;             // 16バイト (0-15)
+    int32_t enableLighting;    // 4バイト (16-19)
+    int32_t enableToonShading; // 4バイト (20-23)
+    Vector2 pad1;              // 8バイト (24-31) - 16バイト境界に合わせる
+    Matrix4x4 uvTransform;     // 64バイト (32-95)
+    Vector3 emissive;          // 12バイト (96-107)
+    float shininess;           // 4バイト (108-111)
 
-    Vector4 fresnelColor;      // 16バイト
-    float fresnelPower;        // 4バイト
-    float pad2[3];             // 12バイト (★超重要：次のrimColorを16の倍数に押し出すための隙間埋め)
+    Vector4 fresnelColor;      // 16バイト (112-127)
+    float fresnelPower;        // 4バイト (128-131)
+    float pad2[3];             // 12バイト (132-143) - rimColorを16倍数へ押し出し
 
-    Vector4 rimColor;          // 16バイト
-    float rimThreshold;        // 4バイト
-    float pad3[3];             // 12バイト (隙間埋め)
+    Vector4 rimColor;          // 16バイト (144-159)
+    float rimThreshold;        // 4バイト (160-163)
+    float pad3[3];             // 12バイト (164-175) - 次の変数を16倍数へ押し出し
 
-    std::string enviromentTexture;
-	float environmentCoefficient;
+    // ★ enviromentTexture を削除
+
+    float environmentCoefficient; // 4バイト (176-179)
+    float pad4[3];                // 12バイト (180-191) - 構造体末尾を16の倍数に合わせる
 };

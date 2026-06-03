@@ -7,6 +7,9 @@
 #include <cassert>
 #include <wrl.h>
 #include <dxcapi.h>
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
 
 #include "Calc.h"
 #include "CommonStructs.h"
@@ -45,6 +48,8 @@ private:
 	// バッファリソースの使い道を補足するバッファビュー
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
 
+	// 環境マップ用テクスチャのファイルパス
+	std::string enviromentTexture;
 
 	// ModelCommonのポインタ
 	ModelCommon* modelCommon_ = nullptr;

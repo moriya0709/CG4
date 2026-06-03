@@ -295,15 +295,15 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>C:\CG2-00-01\externals\DirectXTex;$(ProjectDir);$(ProjectDir)engine\2d;$(ProjectDir)engine\3d;$(ProjectDir)engine\audio;$(ProjectDir)engine\base;$(ProjectDir)engine\io;$(ProjectDir)engine\math;$(ProjectDir)engine\game;$(ProjectDir)engine\scene;$(ProjectDir)engine\camera;$(ProjectDir)application\postEffect;$(ProjectDir)application\railCamera;$(ProjectDir)application\rayMarching;$(ProjectDir)application\trailEffect</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\CG2-00-01\externals\DirectXTex;$(ProjectDir);$(ProjectDir)engine\2d;$(ProjectDir)engine\3d;$(ProjectDir)engine\audio;$(ProjectDir)engine\base;$(ProjectDir)engine\io;$(ProjectDir)engine\math;$(ProjectDir)engine\game;$(ProjectDir)engine\scene;$(ProjectDir)engine\camera;$(ProjectDir)application\postEffect;$(ProjectDir)application\railCamera;$(ProjectDir)application\rayMarching;$(ProjectDir)application\trailEffect;$(ProjectDir)externals\assimp\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
       <AdditionalOptions>/ignore:4049 /ignore:4098 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>imgui.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(SolutionDir)..\generated\outputs\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>imgui.lib;assimp-vc143-mtd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)..\generated\outputs\$(Configuration)\;$(ProjectDir)externals\assimp\lib\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll"
@@ -322,7 +322,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalIncludeDirectories>C:\CG2-00-01\externals\DirectXTex;$(ProjectDir);$(ProjectDir)engine\2d;$(ProjectDir)engine\3d;$(ProjectDir)engine\audio;$(ProjectDir)engine\base;$(ProjectDir)engine\io;$(ProjectDir)engine\math;$(ProjectDir)engine\game;$(ProjectDir)engine\scene;$(ProjectDir)engine\camera;$(ProjectDir)application\postEffect;$(ProjectDir)application\railCamera;$(ProjectDir)application\\rayMarching</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\CG2-00-01\externals\DirectXTex;$(ProjectDir);$(ProjectDir)engine\2d;$(ProjectDir)engine\3d;$(ProjectDir)engine\audio;$(ProjectDir)engine\base;$(ProjectDir)engine\io;$(ProjectDir)engine\math;$(ProjectDir)engine\game;$(ProjectDir)engine\scene;$(ProjectDir)engine\camera;$(ProjectDir)application\postEffect;$(ProjectDir)application\railCamera;$(ProjectDir)application\rayMarching;$(ProjectDir)application\trailEffect;$(ProjectDir)externals\assimp\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -330,8 +330,8 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalOptions>/ignore:4049 /ignore:4098 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(SolutionDir)..\generated\outputs\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>assimp-vc143-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)..\generated\outputs\$(Configuration)\;$(ProjectDir)externals\assimp\lib\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll"
@@ -350,7 +350,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalIncludeDirectories>C:\CG2-00-01\externals\DirectXTex;$(ProjectDir);$(ProjectDir)engine\2d;$(ProjectDir)engine\3d;$(ProjectDir)engine\audio;$(ProjectDir)engine\base;$(ProjectDir)engine\io;$(ProjectDir)engine\math;$(ProjectDir)engine\game;$(ProjectDir)engine\scene;$(ProjectDir)engine\camera;$(ProjectDir)application\postEffect;$(ProjectDir)application\railCamera;$(ProjectDir)application\\rayMarching</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\CG2-00-01\externals\DirectXTex;$(ProjectDir);$(ProjectDir)engine\2d;$(ProjectDir)engine\3d;$(ProjectDir)engine\audio;$(ProjectDir)engine\base;$(ProjectDir)engine\io;$(ProjectDir)engine\math;$(ProjectDir)engine\game;$(ProjectDir)engine\scene;$(ProjectDir)engine\camera;$(ProjectDir)application\postEffect;$(ProjectDir)application\railCamera;$(ProjectDir)application\rayMarching;$(ProjectDir)application\trailEffect;$(ProjectDir)externals\assimp\include</AdditionalIncludeDirectories>
       <Optimization>Disabled</Optimization>
       <WholeProgramOptimization>false</WholeProgramOptimization>
     </ClCompile>
