@@ -51,6 +51,7 @@ void Game::Initialize() {
 	ModelManager::GetInstance()->LoadModel("Resource/ball", "ball.obj");
 	ModelManager::GetInstance()->LoadModel("Resource/emission", "emission.obj");
 	ModelManager::GetInstance()->LoadModel("Resource/terrain", "terrain.obj");
+	ModelManager::GetInstance()->LoadModel("Resource/ball", "ball.gltf");
 
 	// サウンド
 	SoundManager::GetInstance()->Initialize();

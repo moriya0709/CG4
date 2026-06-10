@@ -45,6 +45,31 @@ private:
 	   { 0.0f, 0.0f, 0.0f } // translate
 	};
 
+
+	// *ライティング* //
+
+	// 平行光
+	bool isDirectionalLight = false;
+	Vector4 DirectionalLightColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+	Vector3 DirectionalLightDirection = { 0.0f, -1.0f, 0.0f };
+	float DirectionalLightIntensity = 1.0f;
+	// 環境光
+	bool isAmbientLight = true;
+	Vector4 AmbientLightColor = { 0.2f, 0.2f, 0.2f,1.0f };
+	float AmbientLightIntensity = 1.0f;
+	// ポイントライト
+	bool isPointLight = false;
+	Vector4 PointLightColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+	Vector3 PointLightPosition = { 1.0f, 1.0f, 0.0f };
+	float PointLightIntensity = 1.0f;
+	// スポットライト
+	bool isSpotLight = false;
+	Vector4 SpotLightColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+	Vector3 SpotLightPosition = { 0.0f, 0.0f, 0.0f };
+	Vector3 SpotLightDirection = { 0.0f, 0.0f, 0.0f };
+	float SpotLightRange = 10.0f;
+	float SpotLightIntensity = 1.0f;
+
 	// *ポストエフェクト* //
 
 	// 反転

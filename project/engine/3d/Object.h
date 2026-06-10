@@ -146,7 +146,7 @@ private:
 	Transform cameraTransform;
 
 	// 太陽のライティングを適応
-	bool isSunLight = true;
+	bool isSunLight = false;
 
 	// モーションブラー
 	Matrix4x4 currentWVP_;

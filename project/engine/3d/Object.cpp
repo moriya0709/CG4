@@ -30,15 +30,15 @@ void Object::Initialize(Camera* camera) {
 	directionalLightData->color = { 1.0f, 1.0f, 1.0f, 1.0f };
 	directionalLightData->direction = { 0.0f, -1.0f, 0.0f };
 	directionalLightData->intensity = 1.0f;
-	directionalLightData->isDisplay = false;
+	directionalLightData->isDisplay = true;
 
 	// *環境光* //
 	ambientLightResource = dxCommon_->CreateBufferResource(sizeof(AmbientLight));
 	ambientLightResource->Map(0, nullptr, reinterpret_cast<void**>(&ambientLightData));
 	// 初期値
-	ambientLightData->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+	ambientLightData->color = { 0.5f, 0.5f, 0.5f, 1.0f };
 	ambientLightData->intensity = 1.0f;
-	ambientLightData->isDisplay = false;
+	ambientLightData->isDisplay = true;
 
 	// *ポイントライト* //
 	pointLightResource = dxCommon_->CreateBufferResource(sizeof(PointLight));
@@ -102,11 +102,13 @@ void Object::Update() {
 
 	// 通常通り、現在のワールド行列を計算
 	Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
-	transformationMatrixData->World = worldMatrix;
+	transformationMatrixData->World = model_->GetModelData().rootNode.localMatrix * worldMatrix * camera_->GetViewProjectionMatrix();
 
 	// 現在のWVP行列を計算
 	currentWVP_ = Multiply(worldMatrix, camera_->GetViewProjectionMatrix());
-	transformationMatrixData->WVP = currentWVP_;
+	transformationMatrixData->WVP = model_->GetModelData().rootNode.localMatrix * currentWVP_;
+
+	
 
 	// 太陽ライト
 	if(isSunLight)

@@ -24,10 +24,17 @@ struct VertexData {
 	Vector3 normal; // 正規化座標
 	Vector3 outlineNormal;   // 第二法線
 };
+// ノードデータ
+struct Node {
+    Matrix4x4 localMatrix; // ローカル変換行列
+    std::string name; // ノードの名前
+    std::vector<Node> children; // 子ノードのリスト
+};
 // モデルデータ
 struct ModelData {
 	std::vector<VertexData> vertices;
 	MaterialData material;
+	Node rootNode;
 };
 // マテリアルデータ
 struct Material {

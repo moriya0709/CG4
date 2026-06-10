@@ -27,11 +27,17 @@ public:
 
 	// .mtlファイルの読み込み
 	MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& filename);
-	// .objファイルの読み込み
-	ModelData LoadObjFile(const std::string& directoryPath, const std::string& filename);
+	// モデルファイルの読み込み
+	ModelData LoadModelFile(const std::string& directoryPath, const std::string& filename);
 
 	// 第二法線生成
 	void GenerateOutlineNormal(std::vector<VertexData>& vertices);
+
+	// ノードの読み込み
+	Node ReadNode(aiNode* node);
+
+	// getter
+	ModelData GetModelData() const { return modelData; }
 
 private:
 	// Objファイルのデータ
