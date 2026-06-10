@@ -9,7 +9,7 @@ void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, const 
 	dxCommon_ = dxCommon;
 
 	// モデル読み込み
-	modelData = LoadObjFile(directoryPath, filename);
+	modelData = LoadModelFile(directoryPath, filename);
 
 	GenerateOutlineNormal(modelData.vertices);
 
@@ -49,7 +49,7 @@ void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, const 
 	// 環境マップ用テクスチャ
 	enviromentTexture = "Resource/rostock_laage_airport_4k.dds";
 	TextureManager::GetInstance()->LoadTexture(enviromentTexture);
-	materialData->environmentCoefficient = 1.0f;
+	materialData->environmentCoefficient = 0.0f;
 
 	// *テクスチャ* //
 
@@ -110,8 +110,8 @@ MaterialData Model::LoadMaterialTemplateFile(const std::string& directoryPath, c
 	return materialData;
 }
 
-// .objファイルの読み込み
-ModelData Model::LoadObjFile(const std::string& directoryPath, const std::string& filename) {
+// モデルファイルの読み込み
+ModelData Model::LoadModelFile(const std::string& directoryPath, const std::string& filename) {
 	ModelData modelData; // 構築するModelData
 	std::vector<Vector4> positions; //位置
 	std::vector<Vector3> normals; // 法線
@@ -121,8 +121,31 @@ ModelData Model::LoadObjFile(const std::string& directoryPath, const std::string
 	// ファイルを開く
 	Assimp::Importer importer;
 	std::string filePath = directoryPath + "/" + filename;
-	const aiScene* scene = importer.ReadFile(filePath.c_str(), aiProcess_FlipWindingOrder | aiProcess_FlipUVs);
-	assert(scene != nullptr && "ファイルの読み込みに失敗しました。パスを確認してください。");
+
+	// 拡張子を取得
+	std::string ext = "";
+	size_t dotIdx = filename.find_last_of('.');
+	if (dotIdx != std::string::npos) {
+		ext = filename.substr(dotIdx + 1);
+		// 小文字化
+		for (char& c : ext) {
+			c = std::tolower(static_cast<unsigned char>(c));
+		}
+	}
+
+	// 各フォーマットの判定フラグ
+	bool isOBJ = (ext == "obj");
+	bool isGLTF = (ext == "gltf" || ext == "glb");
+
+	// Assimp読み込みフラグの決定
+	unsigned int pFlags = aiProcess_FlipWindingOrder;
+	if (isOBJ) {
+		pFlags |= aiProcess_FlipUVs; // OBJの時だけUVを上下反転
+	}
+
+	// ファイルを読み込む
+	const aiScene* scene = importer.ReadFile(filePath.c_str(), pFlags);
+	assert(scene != nullptr && "ファイルの読み込みに失敗しました。");
 	assert(scene->HasMeshes());
 
 	// メッシュを解析する
@@ -148,6 +171,12 @@ ModelData Model::LoadObjFile(const std::string& directoryPath, const std::string
 				// aiProcess_MakeLeftHandedはz*=-1で、右手->左手に変換するので手動で対処
 				vertex.position.z *= -1.0f;
 				vertex.normal.z *= -1.0f;
+
+				if (isGLTF) {
+					// glTFの左右反転を直すためにU座標を反転
+					vertex.texcoord.x = 1.0f - vertex.texcoord.x;
+				}
+
 				modelData.vertices.push_back(vertex);
 
 			}
@@ -166,6 +195,9 @@ ModelData Model::LoadObjFile(const std::string& directoryPath, const std::string
 			modelData.material.textureFilePath = directoryPath + "/" + textureFilePath.C_Str();
 		}
 	}
+
+	// ノードを解析する
+	modelData.rootNode = ReadNode(scene->mRootNode);
 	
 
 	return modelData;
@@ -190,4 +222,24 @@ void Model::GenerateOutlineNormal(std::vector<VertexData>& vertices) {
 
 		vertices[i].outlineNormal = Normalize(sumNormal);
 	}
+}
+
+Node Model::ReadNode(aiNode* node) {
+	Node result;
+	aiMatrix4x4 aiLocalMatrix = node->mTransformation; // localMatrix取得
+	aiLocalMatrix.Transpose(); // 列ベクトル形式を行ベクトル形式に転置
+	
+	for (int i = 0; i < 4; ++i) {
+		for(int j = 0; j < 4; ++j){
+			result.localMatrix.m[i][j] = aiLocalMatrix[i][j];
+		}
+	}
+
+	result.name = node->mName.C_Str(); // Node名を格納
+	result.children.resize(node->mNumChildren); // 子供の数だけ確保
+	for (uint32_t childIndex = 0; childIndex < node->mNumChildren; ++childIndex) {
+		// 再帰的に呼んで階層構造を作っていく
+		result.children[childIndex] = ReadNode(node->mChildren[childIndex]);
+	}
+	return result;
 }

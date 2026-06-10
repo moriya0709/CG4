@@ -21,7 +21,7 @@ void TitleScene::Initialize() {
 	object->SetTranslate({ 0.0f, 0.0f, 0.0f });
 
 	// 初期化済みの3Dオブジェクトにモデルを紐づける
-	object->SetModel("ball.obj");
+	object->SetModel("ball.gltf");
 
 	// パーティクル
 	particleObj = std::make_unique<ParticleEmitter>();
@@ -55,6 +55,31 @@ void TitleScene::Update() {
 
 	// スカイボックス
 	Skybox::GetInstance()->Update();
+
+#pragma region ライティング
+	// *ライティング* //
+	// 平行光
+	object->SetDirectionalLight(isDirectionalLight);
+	object->SetDirectionalLightDirection(DirectionalLightDirection);
+	object->SetDirectionalLightColor(DirectionalLightColor);
+	object->SetDirectionalLightIntensity(DirectionalLightIntensity);
+	// 環境光
+	object->SetAmbientLight(isAmbientLight);
+	object->SetAmbientLightColor(AmbientLightColor);
+	object->SetAmbientLightIntensity(AmbientLightIntensity);
+	// ポイントライト
+	object->SetPointLight(isPointLight);
+	object->SetPointLightColor(PointLightColor);
+	object->SetPointLightPosition(PointLightPosition);
+	object->SetPointLightIntensity(PointLightIntensity);
+	// スポットライト
+	object->SetSpotLight(isSpotLight);
+	object->SetSpotLightColor(SpotLightColor);
+	object->SetSpotLightPosition(SpotLightPosition);
+	object->SetSpotLightDirection(SpotLightDirection);
+	object->SetSpotLightRange(SpotLightRange);
+	object->SetSpotLightIntensity(SpotLightIntensity);
+#pragma endregion
 
 #pragma region ポストエフェクト
 	// *ポストエフェクト* //
@@ -132,6 +157,57 @@ void TitleScene::Update() {
 	ImGui::DragFloat3("cameraRotate", &cameraTransform.rotate.x, 0.01f, -10.0f, 10.0f);
 	camera->SetTranslate(cameraTransform.translate);
 	camera->SetRotate(cameraTransform.rotate);
+
+#pragma region ライティング
+	// *ライティング* //
+	ImGui::Text("Lighting"); // ライティングのテキスト
+
+	// 平行光
+	if (ImGui::TreeNode("DirectionalLight")) {
+		ImGui::Checkbox("OnOff", &isDirectionalLight);
+		if (isDirectionalLight) {
+			ImGui::ColorEdit4("Color", &DirectionalLightColor.x);
+			ImGui::DragFloat3("Direction", &DirectionalLightDirection.x, 0.01f, -100.0f, 100.0f);
+			ImGui::DragFloat("Intensity", &DirectionalLightIntensity, 0.01f, 0.0f, 10.0f);
+		}
+		ImGui::TreePop();
+	}
+	// 環境光
+	if (ImGui::TreeNode("AmbientLight")) {
+		ImGui::Checkbox("OnOff", &isAmbientLight);
+		if (isAmbientLight) {
+			ImGui::ColorEdit4("Color", &AmbientLightColor.x);
+			ImGui::DragFloat("Intensity", &AmbientLightIntensity, 0.01f, 0.0f, 10.0f);
+		}
+
+		ImGui::TreePop();
+	}
+	// ポイントライト
+	if (ImGui::TreeNode("PointLight")) {
+		ImGui::Checkbox("OnOff", &isPointLight);
+		if (isPointLight) {
+			ImGui::ColorEdit4("Color", &PointLightColor.x);
+			ImGui::DragFloat3("Position", &PointLightPosition.x, 0.01f, -100.0f, 100.0f);
+			ImGui::DragFloat("Intensity", &PointLightIntensity, 0.01f, 0.0f, 10.0f);
+		}
+
+		ImGui::TreePop();
+	}
+	// スポットライト
+	if (ImGui::TreeNode("SpotLight")) {
+		ImGui::Checkbox("OnOff", &isSpotLight);
+		if (isSpotLight) {
+			ImGui::ColorEdit4("Color", &SpotLightColor.x);
+			ImGui::DragFloat3("Position", &SpotLightPosition.x, 0.01f, -100.0f, 100.0f);
+			ImGui::DragFloat3("Direction", &SpotLightDirection.x, 0.01f, -100.0f, 100.0f);
+			ImGui::DragFloat("Range", &SpotLightRange, 0.01f, 0.0f, 100.0f);
+			ImGui::DragFloat("Intensity", &SpotLightIntensity, 0.01f, 0.0f, 10.0f);
+		}
+
+		ImGui::TreePop();
+	}
+
+#pragma endregion
 
 #pragma region ポストエフェクト
 	// *ポストエフェクト* //
@@ -235,7 +311,6 @@ void TitleScene::Update() {
 #pragma endregion
 
 #pragma region レイマーチング
-	/*
 
 	// レイマーチング
 	//ImGui::DragFloat("rayMarchingTime", &rayMarchingTime, 0.1f,0.0f,10.0f);
@@ -251,7 +326,6 @@ void TitleScene::Update() {
 	ImGui::DragFloat("thunderFrequency", &thunderFrequency, 0.001f, 0.0f, 10.0f);
 	ImGui::DragFloat("thunderBrightness", &thunderBrightness, 0.01f, 0.0f, 300.0f);
 
-	*/
 
 #pragma endregion
 
@@ -268,7 +342,7 @@ void TitleScene::Draw2D() {
 }
 void TitleScene::Draw3D() {
 	// スカイボックス
-	Skybox::GetInstance()->Draw();
+	//Skybox::GetInstance()->Draw();
 
 	// 3Dオブジェクトの描画準備
 	ObjectCommon::GetInstance()->SetCommonPipelineState();
