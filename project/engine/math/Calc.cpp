@@ -80,6 +80,23 @@ Vector3 operator/(const Vector3& v, float scalar)
     return Vector3 { v.x / scalar, v.y / scalar, v.z / scalar };
 }
 
+Vector4& operator/=(Vector4& v, float scalar) {
+    v.x /= scalar;
+    v.y /= scalar;
+    v.z /= scalar;
+    v.w /= scalar;
+    return v;
+}
+
+Vector4 operator*(const Matrix4x4& mat, const Vector4& vec) {
+    return Vector4(
+        mat.m[0][0] * vec.x + mat.m[0][1] * vec.y + mat.m[0][2] * vec.z + mat.m[0][3] * vec.w,
+        mat.m[1][0] * vec.x + mat.m[1][1] * vec.y + mat.m[1][2] * vec.z + mat.m[1][3] * vec.w,
+        mat.m[2][0] * vec.x + mat.m[2][1] * vec.y + mat.m[2][2] * vec.z + mat.m[2][3] * vec.w,
+        mat.m[3][0] * vec.x + mat.m[3][1] * vec.y + mat.m[3][2] * vec.z + mat.m[3][3] * vec.w
+    );
+}
+
 // 行列の乗算
 Matrix4x4 Multiply(Matrix4x4 matrix1, Matrix4x4 matrix2)
 {

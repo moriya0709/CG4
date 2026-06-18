@@ -61,6 +61,8 @@ private:
 	Vector2 uvScale = { 1.0f, 1.0f }; // UVスケール
 	Vector2 uvScrollSpeed = { 0.1f, 0.0f }; // UVスクロール速度
 	Vector2 uvOffset = { 0.0f, 0.0f }; // UVオフセット
+	int32_t useNoise = 0;
+	Vector3 burnColor = { 1.0f, 0.25f, 0.0f }; // ふちの色
 
 	char fileName[20]; //パーティクルのファイル名
 

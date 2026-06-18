@@ -78,6 +78,9 @@ public:
 		// このグループに属するパーティクルのリスト
 		std::list<Particle> particles;
 		BlendMode blendMode;
+
+		// 描画順の優先度
+		int priority = 100;
 	};
 	std::unordered_map<std::string, ParticleGroup> particleGroups;
 
@@ -115,8 +118,9 @@ public:
 		bool isRandPosition[3], bool isRandScale[3],
 		bool isRandRotate[3], bool isRandVelocity[3], Vector4 color,
 		float emissive, Vector4 finalColor, float colorChangeSpeed,
-		bool isColorChange[4], bool isScaleChange[3], 
-		float scaleAdd, Vector2 uvScale, Vector2 uvScrollSpeed, Vector2 uvOffset
+		bool isColorChange[4], bool isScaleChange[3],
+		float scaleAdd, Vector2 uvScale, Vector2 uvScrollSpeed,
+		Vector2 uvOffset
 	);
 
 	// パーティクルの発生
@@ -134,18 +138,23 @@ public:
 		bool isRandRotate[3], bool isRandVelocity[3], Vector4 color,
 		float emissive, BlendMode blendMode, Vector4 finalColor,
 		float colorChangeSpeed, bool isColorChange[4], bool isScaleChange[3], 
-		float scaleAdd, Vector2 uvScale, Vector2 uvScrollSpeed, Vector2 uvOffset
+		float scaleAdd, Vector2 uvScale, Vector2 uvScrollSpeed,
+		Vector2 uvOffset, int32_t useNoise, Vector3 burnColor
 	);
 
 	// OBJファイルからグループを作成
-	void CreateParticleGroup(const std::string& groupName, const std::string& directoryPath, const std::string& filename, const std::string textureFilePath);
+	void CreateParticleGroup(const std::string& groupName, const std::string& directoryPath, const std::string& filename, const std::string textureFilePath, int priority = 100);
 	// 生成した頂点データ(Ringなど)からグループを作成
-	void CreateParticleGroup(const std::string& groupName, const std::vector<VertexData>& vertices, const std::string textureFilePath);
+	void CreateParticleGroup(const std::string& groupName, const std::vector<VertexData>& vertices, const std::string textureFilePath, int priority = 100);
 
-	// リング状の頂点データを生成する関数
+	// リングメッシュ生成
 	std::vector<VertexData> Ring();
-	// 円柱上の頂点データを生成すｓる関数
+	// 円柱メッシュ生成
 	std::vector<VertexData> Cylinder();
+	// 円錐メッシュ生成
+	std::vector<VertexData> Cone();
+	// 球メッシュ生成
+	std::vector<VertexData> Sphere();
 
 	// シングルトンインスタンスの取得
 	static ParticleManager* GetInstance();

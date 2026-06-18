@@ -9,6 +9,7 @@
 #include "WindowAPI.h"
 #include "Calc.h"
 
+class Camera;
 
 class Input {
 public:
@@ -31,11 +32,10 @@ public:
 	LONG GetMouseX() const { return mouseState.lX; }
 	LONG GetMouseY() const { return mouseState.lY; }
 	Vector2 GetMouseScreen() const {
-		return Vector2{
-static_cast<float>(mouseScreenX),
-static_cast<float>(mouseScreenY)
+		return Vector2{static_cast<float>(mouseScreenX),static_cast<float>(mouseScreenY)
 		};
 	}
+	Vector3 GetMouseWorld(Camera* camera);
 	bool IsMouseButtonPressed(int button);
 
 	// ゲームパッド

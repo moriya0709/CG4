@@ -3,6 +3,7 @@
 #include "SpriteCommon.h"
 #include "SceneManager.h"
 #include "SkyBox.h"
+#include "TrailEffectManager.h"
 
 void TitleScene::Initialize() {
 
@@ -24,15 +25,47 @@ void TitleScene::Initialize() {
 	object->SetModel("ball.gltf");
 
 	// パーティクル
-	particleObj = std::make_unique<ParticleEmitter>();
-	particleObj->Initialize("obj", transformParticle, 5, 0.1f);
-	particleObj->SetActive("obj");
-	particleObj->LoadParticle("Resource/particle/01_00.csv");
 
-	particleRing = std::make_unique<ParticleEmitter>();
-	particleRing->Initialize("cylinder", transformParticle, 5, 0.1f);
-	particleRing->SetActive("cylinder");
-	particleRing->LoadParticle("Resource/particle/test.csv");
+	// トルネード
+	for (int i = 0; i < kTornadoCount; i++) {
+		tornado[i] = std::make_unique<ParticleEmitter>();
+	}
+	tornado[0]->Initialize("Tornado1", transformParticle, 5, 0.1f);
+	tornado[1]->Initialize("Tornado2", transformParticle, 5, 0.1f);
+	tornado[2]->Initialize("Tornado3", transformParticle, 5, 0.1f);
+	tornado[3]->Initialize("Tornado4", transformParticle, 5, 0.1f);
+	tornado[4]->Initialize("Tornado5", transformParticle, 5, 0.1f);
+	tornado[5]->Initialize("Tornado6", transformParticle, 5, 0.1f);
+	tornado[6]->Initialize("Tornado7", transformParticle, 5, 0.1f);
+	tornado[7]->Initialize("Tornado8", transformParticle, 5, 0.1f);
+	tornado[0]->SetActive("Tornado1");
+	tornado[0]->LoadParticle("Resource/particle/tornado.csv");
+	tornado[1]->SetActive("Tornado2");
+	tornado[1]->LoadParticle("Resource/particle/tornado_2.csv");
+	tornado[2]->SetActive("Tornado3");
+	tornado[2]->LoadParticle("Resource/particle/tornado_3.csv");
+	tornado[3]->SetActive("Tornado4");
+	tornado[3]->LoadParticle("Resource/particle/tornado_4.csv");
+	tornado[4]->SetActive("Tornado5");
+	tornado[4]->LoadParticle("Resource/particle/tornado_5.csv");
+	tornado[5]->SetActive("Tornado6");
+	tornado[5]->LoadParticle("Resource/particle/tornado_6.csv");
+	tornado[6]->SetActive("Tornado7");
+	tornado[6]->LoadParticle("Resource/particle/tornado_7.csv");
+	tornado[7]->SetActive("Tornado8");
+	tornado[7]->LoadParticle("Resource/particle/tornado_8.csv");
+
+	particleMesh = std::make_unique<ParticleEmitter>();
+	particleMesh->Initialize("sphere", transformParticle, 5, 0.1f);
+	particleMesh->SetActive("sphere");
+	particleMesh->LoadParticle("Resource/particle/tornado.csv");
+
+	// トレイルエフェクト
+	trailEffect->Initialize("Resource/trail/trail.png", transformParticle, 1.0f, 1.5f);
+	trailEffect->SetColor(Vector4(1.0f, 1.0f, 1.0f, 1.0f));
+	trailEffect->LoadCsv("Resource/trail/shot.csv");
+	trailEffect->SetDistance(0.01f);
+	TrailEffectManager::GetInstance()->AddTrail(trailEffect);
 
 	// 音声再生
 	//SoundManager::GetInstance()->Play("bgm");
@@ -49,10 +82,21 @@ void TitleScene::Update() {
 	object->Update();
 
 	// *パーティクル* //
-	particleObj->Update();
-	particleRing->Update();
-	particleRing->Editor();
+	if (isTornado) {
+		for (int i = 0; i < kTornadoCount; i++) {
+			tornado[i]->Update();
+		}
+	}
+	particleMesh->Update();
+	particleMesh->Editor();
 
+
+	transformParticle.translate = input->GetMouseWorld(camera.get());
+
+	// トレイルエフェクト更新
+	trailEffect->AddPoint(transformParticle.translate);
+	trailEffect->SetTranslate(transformParticle.translate);
+	
 	// スカイボックス
 	Skybox::GetInstance()->Update();
 
@@ -152,6 +196,8 @@ void TitleScene::Update() {
 	// フレームレートの取得と表示
 	float fps = ImGui::GetIO().Framerate;
 	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / fps, fps);
+
+	ImGui::Checkbox("isTornado", &isTornado);
 
 	ImGui::DragFloat3("cameraTranslate", &cameraTransform.translate.x, 0.1f, -500.0f, 500.0f);
 	ImGui::DragFloat3("cameraRotate", &cameraTransform.rotate.x, 0.01f, -10.0f, 10.0f);
@@ -349,7 +395,7 @@ void TitleScene::Draw3D() {
 
 	
 	// 3Dオブジェクト描画
-	object->Draw();
+	//object->Draw();
 
 
 	// アウトライン描画準備
