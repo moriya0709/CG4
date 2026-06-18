@@ -14,6 +14,7 @@
 #include "BaseScene.h"
 #include "PostEffect.h"
 #include "RailCamera.h"
+#include "TrailEffect.h"
 
 using namespace DirectX;
 
@@ -105,7 +106,7 @@ private:
 
 	// ブルーム
 	float bloomThreshold = 1.0f;
-	float bloomIntensity = 0.0f;
+	float bloomIntensity = 1.0f;
 	float bloomBlurRadius = 1.0f;
 
 	// レンズフレア
@@ -137,11 +138,17 @@ private:
 	int padX;
 	int padY;
 	
+	bool isTornado = true;
+
 	// カメラ
 	std::unique_ptr<Camera> camera = nullptr;
 	// 3Dオブジェクト
 	std::unique_ptr <Object> object = nullptr;
 	// パーティクルエミッタ
-	std::unique_ptr <ParticleEmitter> particleObj = nullptr;
-	std::unique_ptr <ParticleEmitter> particleRing = nullptr;
+	std::unique_ptr <ParticleEmitter> tornado[8] = {};
+	const int kTornadoCount = 8;
+	std::unique_ptr <ParticleEmitter> particleMesh = nullptr;
+	// トレイルエフェクト
+	std::shared_ptr<TrailEffect> trailEffect = std::make_shared<TrailEffect>();
+
 };

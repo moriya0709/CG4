@@ -1,27 +1,23 @@
-// ===================================================
-// TrailEffect.VS.hlsl
-// ===================================================
-
-// ▼▼ hlsli に書いていたものを直接ここに書く ▼▼
 struct VSInput
 {
     float3 Position : POSITION;
-    float2 UV : TEXCOORD;
+    float2 UV : TEXCOORD0;
     float4 Color : COLOR;
+    float Emissive : TEXCOORD1;
 };
 
 struct PSInput
 {
     float4 Position : SV_POSITION;
-    float2 UV : TEXCOORD;
+    float2 UV : TEXCOORD0;
     float4 Color : COLOR;
+    float Emissive : TEXCOORD1;
 };
 
 cbuffer cbuff0 : register(b0)
 {
     matrix viewProjection;
 };
-// ▲▲ ここまで ▲▲
 
 PSInput main(VSInput input)
 {
@@ -32,6 +28,7 @@ PSInput main(VSInput input)
     
     output.UV = input.UV;
     output.Color = input.Color;
+    output.Emissive = input.Emissive;
     
     return output;
 }

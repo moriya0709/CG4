@@ -33,7 +33,8 @@ void ParticleEmitter::Update() {
 			isRandVelocity,
 			color, emissive, blendMode,
 			finalColor, colorChangeSpeed,
-			isColorChange, isScaleChange, scaleAdd, uvScale, uvScrollSpeed, uvOffset
+			isColorChange, isScaleChange, scaleAdd, uvScale, 
+			uvScrollSpeed, uvOffset, useNoise, burnColor
 		);
 
 		emitter.frequencyTime -= emitter.frequency; // 余計に過ぎた時間も紙して頻度計算する
@@ -59,7 +60,7 @@ void ParticleEmitter::Emit() {
 		color, emissive, blendMode,
 		finalColor, colorChangeSpeed,
 		isColorChange, isScaleChange, scaleAdd, uvScale,
-		uvScrollSpeed, uvOffset
+		uvScrollSpeed, uvOffset, useNoise, burnColor
 	);
 
 }
@@ -117,6 +118,16 @@ void ParticleEmitter::SaveParticle(const std::string& filePath) {
 	file << emissive << "\n";
 	// ブレンドモード
 	file << (int)blendMode << "\n";
+	// UVスケール
+	file << uvScale.x << "," << uvScale.y << "\n";
+	// UVスクロール速度
+	file << uvScrollSpeed.x << "," << uvScrollSpeed.y << "\n";
+	// UVオフセット
+	file << uvOffset.x << "," << uvOffset.y << "\n";
+	// ノイズ使用
+	file << useNoise << "\n";
+	// ふちの色
+	file << burnColor.x << "," << burnColor.y << "," << burnColor.z << "\n";
 
 
 	file.close();
@@ -274,6 +285,33 @@ void ParticleEmitter::LoadParticle(const std::string& filePath) {
 		blendMode = (BlendMode)std::stoi(line);
 	}
 
+	// UVスケールの読み込み
+	if (std::getline(file, line)) {
+		sscanf_s(line.c_str(), "%f,%f", &uvScale.x, &uvScale.y);
+	}
+
+	// UVスクロール速度の読み込み
+	if (std::getline(file, line)) {
+		sscanf_s(line.c_str(), "%f,%f", &uvScrollSpeed.x, &uvScrollSpeed.y);
+	}
+
+	// UVオフセットの読み込み
+	if (std::getline(file, line)) {
+		sscanf_s(line.c_str(), "%f,%f", &uvOffset.x, &uvOffset.y);
+	}
+
+	// ノイズ使用の読み込み
+	if (std::getline(file, line)) {
+		int a;
+		sscanf_s(line.c_str(), "%d", &a);
+		useNoise = a;
+	}
+
+	// ふちの色
+	if (std::getline(file, line)) {
+		sscanf_s(line.c_str(), "%f,%f,%f", &burnColor.x, &burnColor.y, &burnColor.z);
+	}
+
 	file.close();
 }
 
@@ -287,17 +325,25 @@ void ParticleEmitter::Editor() {
 	// パーティクルの回転変更
 	ImGui::DragFloat3("rotate", &emitter.transform.rotate.x, 0.1f, 0.0f, 3.14f);
 
-	// パーティクルの状態
-	if (ImGui::Button("FIRE", ImVec2(50, 50))) {
-		LoadParticle("Resource/Particle/fire.csv");
+	// パーティクルのメッシュ
+	if (ImGui::Button("obj", ImVec2(50, 50))) {
+		SetActive("obj");
 	}
 	ImGui::SameLine(); // 横並びにする
-	if (ImGui::Button("Explosion", ImVec2(50, 50))) {
-		LoadParticle("Resource/Particle/explosion.csv");
+	if (ImGui::Button("ring", ImVec2(50, 50))) {
+		SetActive("ring");
 	}
 	ImGui::SameLine(); // 横並びにする
-	if (ImGui::Button("Snow", ImVec2(50, 50))) {
-		LoadParticle("Resource/Particle/snow.csv");
+	if (ImGui::Button("cylinder", ImVec2(50, 50))) {
+		SetActive("cylinder");
+	}
+	ImGui::SameLine(); // 横並びにする
+	if (ImGui::Button("cone", ImVec2(50, 50))) {
+		SetActive("cone");
+	}
+	ImGui::SameLine(); // 横並びにする
+	if (ImGui::Button("sphere", ImVec2(50, 50))) {
+		SetActive("sphere");
 	}
 
 	// パーティクルの発生数
@@ -358,6 +404,11 @@ void ParticleEmitter::Editor() {
 	ImGui::SliderFloat("scaleAdd", &scaleAdd, -0.1f, 0.1f);
 	// uvスケール
 	ImGui::SliderFloat2("uvScale", (float*)&uvScale, 0.0f, 10.0f);
+	ImGui::SliderFloat2("uvScrollSpeed", (float*)&uvScrollSpeed, 0.0f, 10.0f);
+	ImGui::SliderFloat2("uvOffset", (float*)&uvOffset, 0.0f, 10.0f);
+	ImGui::SliderInt("useNoise", &useNoise, 0, 2);
+	// 燃えるエフェクトの色
+	ImGui::ColorEdit3("burnColor", &burnColor.x);
 
 	// ファイル名
 	ImGui::InputText("FileName", fileName, IM_ARRAYSIZE(fileName));

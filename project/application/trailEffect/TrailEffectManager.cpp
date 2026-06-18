@@ -68,12 +68,12 @@ void TrailEffectManager::AddTrail(std::shared_ptr<TrailEffect> trail) {
 }
 
 void TrailEffectManager::UpdateAll() {
-    // 1. 全てのトレイルの「時間」を進める（弾が死んでいても実行される）
+    // 全てのトレイルの「時間」を進める（弾が死んでいても実行される）
     for (auto& trail : m_ActiveTrails) {
         trail->UpdateLifetimes();
     }
 
-    // 2. 寿命が尽きてポイントが0になったトレイルをリストから削除
+    // 寿命が尽きてポイントが0になったトレイルをリストから削除
     std::erase_if(m_ActiveTrails, [](const std::shared_ptr<TrailEffect>& trail) {
         return trail->IsDead(); // m_Points.empty() なら true
         });
@@ -82,22 +82,22 @@ void TrailEffectManager::UpdateAll() {
 void TrailEffectManager::RenderAll() { // 引数はなしにしてある想定です
     if (m_ActiveTrails.empty()) return;
 
-    // 1. バッファをMap
+    // バッファをMap
     TrailVertex* mappedData = nullptr;
     m_VertexBuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedData));
 
     std::vector<TrailVertex> allVertices;
     allVertices.reserve(MAX_TOTAL_VERTICES);
 
-    // ★ 修正ポイント①：DrawInfo にテクスチャ名を記憶できるようにする
+    // 修正ポイント①：DrawInfo にテクスチャ名を記憶できるようにする
     struct DrawInfo {
         UINT StartVertex;
         UINT VertexCount;
-        std::string TextureName; // ← これを追加！
+        std::string TextureName;
     };
     std::vector<DrawInfo> drawInfos;
 
-    // 2. 全トレイルから頂点データを集める
+    // 全トレイルから頂点データを集める
     Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera();
     for (const auto& trail : m_ActiveTrails) {
         size_t currentSize = allVertices.size();
@@ -106,12 +106,11 @@ void TrailEffectManager::RenderAll() { // 引数はなしにしてある想定�
 
         UINT generatedCount = static_cast<UINT>(allVertices.size() - currentSize);
         if (generatedCount > 0) {
-            // ★ 修正ポイント②：DrawInfo に trail->GetTextureName() も一緒に保存する
             drawInfos.push_back({ static_cast<UINT>(currentSize), generatedCount, trail->GetTextureName() });
         }
     }
 
-    // 3. コピーして Unmap
+    // コピーして Unmap
     size_t copyCount = std::min<size_t>(allVertices.size(), MAX_TOTAL_VERTICES);
     if (copyCount > 0) {
         memcpy(mappedData, allVertices.data(), copyCount * sizeof(TrailVertex));
@@ -138,7 +137,7 @@ void TrailEffectManager::RenderAll() { // 引数はなしにしてある想定�
     // 頂点バッファをセット
     cmdList->IASetVertexBuffers(0, 1, &m_VertexBufferView);
 
-    // ★ 修正ポイント③：描画ループの中で、先ほど保存したテクスチャ名をセットする
+    // 先ほど保存したテクスチャ名をセット
     for (const auto& info : drawInfos) {
 
         // TextureManagerから、該当するテクスチャのGPUハンドル(SRV)を取得する
@@ -148,7 +147,7 @@ void TrailEffectManager::RenderAll() { // 引数はなしにしてある想定�
         // RootParameter[1] にテクスチャをセット
         cmdList->SetGraphicsRootDescriptorTable(1, textureHandle);
 
-        // そのテクスチャを使って描画！
+        // 描画
         cmdList->DrawInstanced(info.VertexCount, 1, info.StartVertex, 0);
     }
 }
@@ -219,7 +218,7 @@ void TrailEffectManager::CreateRootSignature() {
 // グラフィックスパイプラインの生成
 void TrailEffectManager::CreateGraphicsPipeline() {
     // InputLayoutの設定 (TrailVertex 構造体と完全に一致させる)
-    D3D12_INPUT_ELEMENT_DESC inputElementDescs[3] = {};
+    D3D12_INPUT_ELEMENT_DESC inputElementDescs[4] = {};
 
     // POSITION (Vector3 なので R32G32B32_FLOAT)
     inputElementDescs[0].SemanticName = "POSITION";
@@ -238,6 +237,12 @@ void TrailEffectManager::CreateGraphicsPipeline() {
     inputElementDescs[2].SemanticIndex = 0;
     inputElementDescs[2].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
     inputElementDescs[2].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+
+    // エミッシブ強度
+    inputElementDescs[3].SemanticName = "TEXCOORD";
+    inputElementDescs[3].SemanticIndex = 1;
+    inputElementDescs[3].Format = DXGI_FORMAT_R32_FLOAT;
+    inputElementDescs[3].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
 
     inputLayoutDesc.pInputElementDescs = inputElementDescs;
     inputLayoutDesc.NumElements = _countof(inputElementDescs);

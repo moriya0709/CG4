@@ -43,7 +43,11 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager
 	// 初期値を書き込む
 	materialData->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
 	materialData->enableLighting = false;
+	materialData->useNoise = 1;
+	materialData->burnColor = Vector3(1.0f, 0.25f, 0.0f);
 	materialData->uvTransform = MakeIdentity4x4();
+	size_t bufferSize = (sizeof(Material) + 255) & ~255;
+	materialResource = dxCommon_->CreateBufferResource(bufferSize);
 
 	// フィールドの設定
 	accelerationField.acceleration = { 15.0f,0.0f,0.0f };
@@ -139,6 +143,9 @@ void ParticleManager::Update() {
 			it->uvOffset.x += it->uvScrollSpeed.x * kDeltaTime;
 			it->uvOffset.y += it->uvScrollSpeed.y * kDeltaTime;
 
+			// ディゾルブ
+			//materialData->dissolveThreshold = it->currentTime / it->lifeTime;
+
 			it->currentTime += kDeltaTime;
 
 			Matrix4x4 scale = MakeScaleMatrix(it->transform.scale);
@@ -180,13 +187,33 @@ void ParticleManager::Draw() {
 	dxCommon_->GetCommandList()->SetGraphicsRootSignature(rootSignature.Get());
 	// プリミティブポロジーを設定
 	dxCommon_->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	
-	// パーティクルグループ描画
-	for (auto& groupPair : particleGroups) {
-		ParticleGroup& group = groupPair.second;
 
-		// パーティクルが1つ以上ある場合だけ描画
-		if (group.particles.empty()) continue;
+	// ---------------------------------------------------------
+	// 1. 【追加】描画対象のグループへのポインタを一時的に配列に集める
+	// ---------------------------------------------------------
+	std::vector<ParticleGroup*> sortedGroups;
+	sortedGroups.reserve(particleGroups.size());
+
+	for (auto& groupPair : particleGroups) {
+		// パーティクルが1つ以上ある場合だけ描画対象にする（元の empty チェックをここに移動）
+		if (!groupPair.second.particles.empty()) {
+			sortedGroups.push_back(&groupPair.second);
+		}
+	}
+
+	// ---------------------------------------------------------
+	// 2. 【追加】priority（優先度）が小さい順（先に描画したい順）にソートする
+	// ---------------------------------------------------------
+	std::sort(sortedGroups.begin(), sortedGroups.end(), [](const ParticleGroup* a, const ParticleGroup* b) {
+		return a->priority < b->priority;
+		});
+
+	// ---------------------------------------------------------
+	// 3. ソートされた順にパーティクルグループを描画
+	// ---------------------------------------------------------
+	for (ParticleGroup* groupPtr : sortedGroups) {
+		// 参照として受け取ることで、既存のコード（group.〜）をそのまま動かせます
+		ParticleGroup& group = *groupPtr;
 
 		// グループが持っている固有の頂点バッファをセットする
 		dxCommon_->GetCommandList()->IASetVertexBuffers(0, 1, &group.vertexBufferView);
@@ -202,7 +229,7 @@ void ParticleManager::Draw() {
 		dxCommon_->GetCommandList()->SetPipelineState(graphicsPipelineStates[blendIndex].Get());
 
 		// マテリアルCBufferの場所を設定
-		dxCommon_->GetCommandList()->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
+		dxCommon_->GetCommandList()->SetGraphicsRootConstantBufferView(0, group.materialResource->GetGPUVirtualAddress());
 
 		// パーティクル用 StructuredBuffer(SRV) を設定
 		dxCommon_->GetCommandList()->SetGraphicsRootDescriptorTable(1, srvManager_->GetGPUDescriptorHandle(group.instancingIndex));
@@ -211,10 +238,8 @@ void ParticleManager::Draw() {
 		dxCommon_->GetCommandList()->SetGraphicsRootDescriptorTable(2, srvManager_->GetGPUDescriptorHandle(group.materialData.textureIndex));
 
 		// ★ 修正2: 描画時の1インスタンスあたりの頂点数を、グループのモデルデータから取得する
-		// （Ringの頂点数で固定しない）
 		dxCommon_->GetCommandList()->DrawInstanced(static_cast<UINT>(group.modelData.vertices.size()), static_cast<UINT>(group.particles.size()), 0, 0);
 	}
-
 }
 
 // ルートシグネチャの作成
@@ -312,8 +337,6 @@ void ParticleManager::CreateRootSignature() {
 	blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
 
 	// RasiterzerStateの設定
-	// 裏面（時計回り）を表示しない
-	//rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;]
 	// カリングしない（裏面も表示させる）
 	rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
 	// 三角形の中を塗りつぶす
@@ -497,7 +520,8 @@ Particle ParticleManager::MakeNewParticleEditor(
 	bool isRandRotate[3], bool isRandVelocity[3], Vector4 color,
 	float emissive, Vector4 finalColor, float colorChangeSpeed,
 	bool isColorChange[4], bool isScaleChange[3], 
-	float scaleAdd, Vector2 uvScale,Vector2 uvScrollSpeed, Vector2 uvOffset
+	float scaleAdd, Vector2 uvScale,Vector2 uvScrollSpeed, 
+	Vector2 uvOffset
 ) {
 	Particle particle;
 	
@@ -555,7 +579,6 @@ Particle ParticleManager::MakeNewParticleEditor(
 	particle.uvScale = uvScale;
 	particle.uvOffset = uvOffset;
 	particle.uvScrollSpeed = uvScrollSpeed;
-
 	return particle;
 }
 
@@ -575,7 +598,8 @@ void ParticleManager::Emit(
 	bool isRandRotate[3], bool isRandVelocity[3], Vector4 color,
 	float emissive, BlendMode blendMode, Vector4 finalColor,
 	float colorChangeSpeed, bool isColorChange[4], bool isScaleChange[3],
-	float scaleAdd, Vector2 uvScale, Vector2 uvScrollSpeed, Vector2 uvOffset
+	float scaleAdd, Vector2 uvScale, Vector2 uvScrollSpeed, 
+	Vector2 uvOffset, int32_t useNoise, Vector3 burnColor
 ) {
 	assert(particleGroups.count(name));
 
@@ -588,16 +612,22 @@ void ParticleManager::Emit(
 		if (group.particles.size() >= kMaxParticleInstance) {
 			break;
 		}
+
+		// ノイズテクスチャ設定
+		group.material->useNoise = useNoise;
+		group.material->burnColor = burnColor;
+
 		group.particles.push_back(
 			MakeNewParticleEditor(randomEngine, position, scale,rotate,
 				distPosition, distScale, distRotate, distVelocity, distTime,
 				isRandPosition, isRandScale, isRandRotate, isRandVelocity,
 				color, emissive, finalColor, colorChangeSpeed,
-				isColorChange, isScaleChange, scaleAdd, uvScale, uvScrollSpeed, uvOffset));
+				isColorChange, isScaleChange, scaleAdd, uvScale, uvScrollSpeed, 
+				uvOffset));
 	}
 }
 
-void ParticleManager::CreateParticleGroup(const std::string& groupName, const std::string& directoryPath, const std::string& filename, const std::string textureFilePath) {
+void ParticleManager::CreateParticleGroup(const std::string& groupName, const std::string& directoryPath, const std::string& filename, const std::string textureFilePath, int priority) {
 	// すでに同じ名前のグループがあれば何もしない
 	if (particleGroups.contains(groupName)) return;
 
@@ -615,6 +645,16 @@ void ParticleManager::CreateParticleGroup(const std::string& groupName, const st
 	std::memcpy(vertexData, newGroup.modelData.vertices.data(), sizeof(VertexData) * newGroup.modelData.vertices.size());
 	newGroup.vertexResource->Unmap(0, nullptr);
 
+	// グループごとのマテリアルリソース（CBuffer）を作成・マップする
+	newGroup.materialResource = dxCommon_->CreateBufferResource(sizeof(Material));
+	newGroup.materialResource->Map(0, nullptr, reinterpret_cast<void**>(&newGroup.material));
+	// 初期値の書き込み
+	newGroup.material->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+	newGroup.material->enableLighting = false;
+	newGroup.material->useNoise = 0; // 初期状態ではノイズなし
+	newGroup.material->uvTransform = MakeIdentity4x4();
+	newGroup.material->burnColor = Vector3(0.0f, 0.0f, 0.0f); // 初期状態では燃えるエフェクトなし
+
 	// マテリアルデータにテクスチャファイルパスを設定
 	newGroup.materialData.textureFilePath = textureFilePath;
 	// テクスチャの読み込み
@@ -622,6 +662,9 @@ void ParticleManager::CreateParticleGroup(const std::string& groupName, const st
 
 	// マテリアルデータにテクスチャのSRVインデックスを記録
 	newGroup.materialData.textureIndex = TextureManager::GetInstance()->GetSrvIndex(newGroup.materialData.textureFilePath);
+
+	// 優先度の設定
+	newGroup.priority = priority;
 
 	// インスタンシング用リソースの生成
 	newGroup.instancingResource = dxCommon_->CreateBufferResource(sizeof(ParticleForGPU) * kMaxParticleInstance);
@@ -640,7 +683,7 @@ void ParticleManager::CreateParticleGroup(const std::string& groupName, const st
 	particleGroups[groupName] = std::move(newGroup);
 }
 
-void ParticleManager::CreateParticleGroup(const std::string& groupName, const std::vector<VertexData>& vertices, const std::string textureFilePath) {
+void ParticleManager::CreateParticleGroup(const std::string& groupName, const std::vector<VertexData>& vertices, const std::string textureFilePath, int priority) {
 	if (particleGroups.contains(groupName)) return;
 
 	ParticleGroup newGroup;
@@ -657,6 +700,16 @@ void ParticleManager::CreateParticleGroup(const std::string& groupName, const st
 	std::memcpy(vertexData, newGroup.modelData.vertices.data(), sizeof(VertexData) * newGroup.modelData.vertices.size());
 	newGroup.vertexResource->Unmap(0, nullptr);
 
+	// グループごとのマテリアルリソース（CBuffer）を作成・マップする
+	newGroup.materialResource = dxCommon_->CreateBufferResource(sizeof(Material));
+	newGroup.materialResource->Map(0, nullptr, reinterpret_cast<void**>(&newGroup.material));
+	// 初期値の書き込み
+	newGroup.material->color = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+	newGroup.material->enableLighting = false;
+	newGroup.material->useNoise = 0; // 初期状態ではノイズなし
+	newGroup.material->uvTransform = MakeIdentity4x4();
+	newGroup.material->burnColor = Vector3(0.0f, 0.0f, 0.0f); // 初期状態では燃えるエフェクトなし
+
 	// マテリアルデータにテクスチャファイルパスを設定
 	newGroup.materialData.textureFilePath = textureFilePath;
 	// テクスチャの読み込み
@@ -664,6 +717,9 @@ void ParticleManager::CreateParticleGroup(const std::string& groupName, const st
 
 	// マテリアルデータにテクスチャのSRVインデックスを記録
 	newGroup.materialData.textureIndex = TextureManager::GetInstance()->GetSrvIndex(newGroup.materialData.textureFilePath);
+
+	// 優先度を設定
+	newGroup.priority = priority;
 
 	// インスタンシング用リソースの生成
 	newGroup.instancingResource = dxCommon_->CreateBufferResource(sizeof(ParticleForGPU) * kMaxParticleInstance);
@@ -772,6 +828,89 @@ std::vector<VertexData> ParticleManager::Cylinder() {
 
 	return vertices;
 
+}
+
+std::vector<VertexData> ParticleManager::Cone() {
+	std::vector<VertexData> vertices;
+
+	const uint32_t kDivide = 32;
+	const float kTopRadius = 2.5f;    // 上を広く
+	const float kBottomRadius = 0.5f; // 下を狭く
+	const float kHeight = 4.0f;       // 竜巻の高さ
+	const float radianPerDivide = 2.0f * std::numbers::pi_v<float> / float(kDivide);
+
+	for (uint32_t index = 0; index < kDivide; ++index) {
+		// ... (Cylinderの実装と同じくsin, cosを計算) ...
+		float sin = std::sin(index * radianPerDivide);
+		float cos = std::cos(index * radianPerDivide);
+		float sinNext = std::sin((index + 1) * radianPerDivide);
+		float cosNext = std::cos((index + 1) * radianPerDivide);
+		float u = float(index) / float(kDivide);
+		float uNext = float(index + 1) / float(kDivide);
+
+		// 法線は傾斜を考慮する必要がありますが、簡易的にはCylinderと同じでも機能します
+		Vector3 normalCurrent = { -sin, 0.0f, cos };
+		Vector3 normalNext = { -sinNext, 0.0f, cosNext };
+
+		VertexData v1 = { { -sin * kTopRadius, kHeight, cos * kTopRadius, 1.0f }, { u, 0.0f }, normalCurrent };
+		VertexData v2 = { { -sinNext * kTopRadius, kHeight, cosNext * kTopRadius, 1.0f }, { uNext, 0.0f }, normalNext };
+		VertexData v3 = { { -sin * kBottomRadius, 0.0f, cos * kBottomRadius, 1.0f }, { u, 1.0f }, normalCurrent };
+		VertexData v4 = { { -sinNext * kBottomRadius, 0.0f, cosNext * kBottomRadius, 1.0f }, { uNext, 1.0f }, normalNext };
+
+		// 三角形ポリゴンを追加
+		vertices.push_back(v1); vertices.push_back(v3); vertices.push_back(v2);
+		vertices.push_back(v2); vertices.push_back(v3); vertices.push_back(v4);
+	}
+	return vertices;
+}
+
+std::vector<VertexData> ParticleManager::Sphere() {
+	std::vector<VertexData> vertices;
+
+	const uint32_t kLatDivide = 32; // 緯度分割数
+	const uint32_t kLonDivide = 32; // 経度分割数
+	const float kRadius = 1.0f;     // 半径
+
+	for (uint32_t lat = 0; lat < kLatDivide; ++lat) {
+		float lat0 = float(lat) / kLatDivide * std::numbers::pi_v<float>;
+		float lat1 = float(lat + 1) / kLatDivide * std::numbers::pi_v<float>;
+
+		for (uint32_t lon = 0; lon < kLonDivide; ++lon) {
+			float lon0 = float(lon) / kLonDivide * 2.0f * std::numbers::pi_v<float>;
+			float lon1 = float(lon + 1) / kLonDivide * 2.0f * std::numbers::pi_v<float>;
+
+			// 4つの頂点を計算
+			// 球面座標系 (x = r*sinθ*cosφ, y = r*cosθ, z = r*sinθ*sinφ)
+			auto GetVertex = [&](float lat, float lon) -> VertexData {
+				float sinLat = std::sin(lat);
+				float cosLat = std::cos(lat);
+				float sinLon = std::sin(lon);
+				float cosLon = std::cos(lon);
+
+				Vector4 pos = {
+					kRadius * sinLat * cosLon,
+					kRadius * cosLat,
+					kRadius * sinLat * sinLon,
+					1.0f
+				};
+				// 法線は球の中心からのベクトル（正規化済み）
+				Vector3 normal = { sinLat * cosLon, cosLat, sinLat * sinLon };
+				// UVは経度と緯度をマッピング
+				Vector2 texcoord = { lon / (2.0f * std::numbers::pi_v<float>), lat / std::numbers::pi_v<float> };
+				return { pos, texcoord, normal };
+				};
+
+			VertexData v1 = GetVertex(lat0, lon0);
+			VertexData v2 = GetVertex(lat0, lon1);
+			VertexData v3 = GetVertex(lat1, lon0);
+			VertexData v4 = GetVertex(lat1, lon1);
+
+			// 三角形ポリゴンを追加
+			vertices.push_back(v1); vertices.push_back(v3); vertices.push_back(v2);
+			vertices.push_back(v2); vertices.push_back(v3); vertices.push_back(v4);
+		}
+	}
+	return vertices;
 }
 
 // シングルトンインスタンスの取得

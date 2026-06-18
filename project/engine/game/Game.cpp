@@ -44,6 +44,17 @@ void Game::Initialize() {
 	ParticleManager::GetInstance()->CreateParticleGroup("obj", "Resource/plane", "plane.obj", "Resource/particle/particle.png");
 	ParticleManager::GetInstance()->CreateParticleGroup("ring", ParticleManager::GetInstance()->Ring(), "Resource/particle/gradationLine.png");
 	ParticleManager::GetInstance()->CreateParticleGroup("cylinder", ParticleManager::GetInstance()->Cylinder(), "Resource/particle/gradationLine.png");
+	ParticleManager::GetInstance()->CreateParticleGroup("cone", ParticleManager::GetInstance()->Cone(), "Resource/particle/gradationLine.png");
+	ParticleManager::GetInstance()->CreateParticleGroup("sphere", ParticleManager::GetInstance()->Sphere(), "Resource/particle/gradationLine.png");
+	// トルネード
+	ParticleManager::GetInstance()->CreateParticleGroup("Tornado1", ParticleManager::GetInstance()->Cone(), "Resource/particle/gradationLine.png");
+	ParticleManager::GetInstance()->CreateParticleGroup("Tornado2", ParticleManager::GetInstance()->Cone(), "Resource/particle/gradationLine.png");
+	ParticleManager::GetInstance()->CreateParticleGroup("Tornado3", ParticleManager::GetInstance()->Cone(), "Resource/particle/gradationLine.png");
+	ParticleManager::GetInstance()->CreateParticleGroup("Tornado4", ParticleManager::GetInstance()->Ring(), "Resource/particle/gradationLine.png");
+	ParticleManager::GetInstance()->CreateParticleGroup("Tornado5", ParticleManager::GetInstance()->Cone(), "Resource/particle/gradationLine.png");
+	ParticleManager::GetInstance()->CreateParticleGroup("Tornado6", ParticleManager::GetInstance()->Cone(), "Resource/particle/gradationLine.png");
+	ParticleManager::GetInstance()->CreateParticleGroup("Tornado7", "Resource/plane", "plane.obj", "Resource/particle/particle.png",0);
+	ParticleManager::GetInstance()->CreateParticleGroup("Tornado8", "Resource/plane", "plane.obj", "Resource/particle/particle.png",0);
 
 	// .objファイルからモデル読み込み
 	ModelManager::GetInstance()->LoadModel("Resource/plane","plane.obj");
@@ -115,7 +126,7 @@ void Game::Draw() {
 	// パーティクル描画
 	ParticleManager::GetInstance()->Draw();
 	// トレイルエフェクト描画
-	//TrailEffectManager::GetInstance()->RenderAll();
+	TrailEffectManager::GetInstance()->RenderAll();
 
 
 	// ポストエフェクト描画

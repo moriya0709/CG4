@@ -2,6 +2,7 @@
 #include <dinput.h>
 
 #include "Input.h"
+#include "Camera.h"
 
 #pragma comment(lib,"dinput8.lib")
 #pragma comment(lib,"dxguid.lib")
@@ -147,6 +148,50 @@ bool Input::TriggerKey(BYTE keyNumber) {
 	}
 
 	return false;
+}
+
+Vector3 Input::GetMouseWorld(Camera* camera) {
+	// 1. マウスのスクリーン座標を取得
+	Vector2 mouseScreen = GetMouseScreen();
+	float screenWidth = 1920.0f;
+	float screenHeight = 1080.0f;
+
+	// 2. NDC（正規化デバイス座標）に変換
+	// ※ Y軸の向きはエンジンによって逆転する場合があります（ここでは下方向を正として反転）
+	float ndcX = (2.0f * mouseScreen.x) / screenWidth - 1.0f;
+	float ndcY = 1.0f - (2.0f * mouseScreen.y) / screenHeight;
+
+	// ニアクリップ面とファークリップ面のNDC座標を作成
+	Vector4 ndcNear(ndcX, ndcY, 0.0f, 1.0f); // OpenGLならZは-1.0f、DirectXなら0.0f
+	Vector4 ndcFar(ndcX, ndcY, 1.0f, 1.0f);
+
+	// 3. ビュー・プロジェクション行列の逆行列を取得
+	Matrix4x4 viewProj = camera->GetViewMatrix() * camera->GetProjectionMatrix();
+	Matrix4x4 invViewProj = Inverse(viewProj);
+
+	// 4. ワールド座標への変換（レイの始点と終点を計算）
+	Vector4 worldNear = invViewProj * ndcNear;
+	worldNear /= worldNear.w; // パースペクティブ除算
+
+	Vector4 worldFar = invViewProj * ndcFar;
+	worldFar /= worldFar.w;
+
+	// 5. レイキャストによる特定平面（例：Z = 0の平面）との交差判定
+	Vector3 rayOrigin = Vector3(worldNear.x, worldNear.y, worldNear.z);
+	Vector3 rayDir = (Vector3(worldFar.x, worldFar.y, worldFar.z) - rayOrigin);
+	rayDir = Normalize(rayDir);
+
+	// Z=0 平面との交点を求める
+	// rayOrigin.z + rayDir.z * t = 0  =>  t = -rayOrigin.z / rayDir.z
+	if (std::abs(rayDir.z) > 0.0001f) // ゼロ除算防止
+	{
+		float t = -rayOrigin.z / rayDir.z;
+		Vector3 targetWorldPos = rayOrigin + rayDir * t;
+
+		// 6. パーティクルのトランスフォームに適用
+		return targetWorldPos;
+	}
+	return Vector3(0.0f,0.0f,0.0f);
 }
 
 // マウスボタンが押されたかどうか
