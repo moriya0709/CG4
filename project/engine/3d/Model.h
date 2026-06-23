@@ -5,6 +5,7 @@
 #include <fstream>
 #include <D3d12.h>
 #include <cassert>
+#include <memory>
 #include <wrl.h>
 #include <dxcapi.h>
 #include <assimp/Importer.hpp>
@@ -13,14 +14,18 @@
 
 #include "Calc.h"
 #include "CommonStructs.h"
+#include "AnimationManager.h"
 
 class ModelCommon;
 class DirectXCommon;
+class AnimationManager;
 
 class Model {
 public:
 	// 初期化
 	void Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon,const std::string& directoryPath,const std::string& filename);
+	// 更新
+	void Update();
 	// 描画
 	void Draw();
 
@@ -61,6 +66,9 @@ private:
 	ModelCommon* modelCommon_ = nullptr;
 	// DirectXCommonのポインタ
 	DirectXCommon* dxCommon_ = nullptr;
+	// AnimationManagerのポインタ
+	std::unique_ptr <AnimationManager> animationManager_ = nullptr;
+	Animation animation_;
 
 };
 

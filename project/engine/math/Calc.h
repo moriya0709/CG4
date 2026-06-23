@@ -31,6 +31,13 @@ struct Vector2Int final {
     int y;
 };
 
+struct Quaternion {
+	float x;
+	float y;
+	float z;
+	float w;
+};
+
 
 // 円周率
 const float PI = 3.141592654f;
@@ -93,10 +100,12 @@ Matrix4x4 MakeRotateXMatrix(float theta);
 Matrix4x4 MakeRotateYMatrix(float theta);
 Matrix4x4 MakeRotateZMatrix(float theta);
 Matrix4x4 MakeRotateMatrix(const Vector3& rot);
+Matrix4x4 MakeRotateMatrix(const Quaternion& quaternion);
 // 平行移動行列の作成
 Matrix4x4 MakeTranslateMatrix(const Vector3& translate);
 // アフィン変換行列の作成
 Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rot, const Vector3& translate);
+Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Quaternion& quaternion, const Vector3& translate);
 // 累積の回転行列の場合
 Matrix4x4 MakeAffineMatrixR(const Vector3& scale, const Matrix4x4& matRot, const Vector3& translate);
 // 透視投影行列
@@ -112,6 +121,7 @@ Matrix4x4 Inverse(const Matrix4x4& m);
 Matrix4x4 MakeIdentity4x4();
 
 Vector3 Normalize(const Vector3& v);
+Quaternion Normalize(const Quaternion& quaternion);
 // 内積
 float Dot(const Vector3& a, const Vector3& b);
 
@@ -125,6 +135,8 @@ float RaySphereIntersect(const Vector3& rayOrigin, const Vector3& rayDir,
 float Smoothstep(float edge0, float edge1, float x);
 
 Vector4 Lerp(const Vector4& a, const Vector4& b, float t);
+Vector3 Lerp(const Vector3& a, const Vector3& b, float t);
+Quaternion Slerp(const Quaternion& q0, const Quaternion& q1, float t);
 
 float Lerp(float x1, float x2, float t);
 

@@ -100,6 +100,9 @@ void Object::Update() {
 	// 新しいWVPを計算する前に、現在のWVPを「過去のWVP」として退避させる
 	transformationMatrixData->prevWVP = currentWVP_;
 
+	// アニメーション
+	model_->Update();
+
 	// 通常通り、現在のワールド行列を計算
 	Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
 	transformationMatrixData->World = model_->GetModelData().rootNode.localMatrix * worldMatrix * camera_->GetViewProjectionMatrix();

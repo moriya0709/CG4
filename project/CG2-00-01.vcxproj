@@ -15,6 +15,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="AnimationManager.cpp" />
     <ClCompile Include="application\railCamera\RailCamera.cpp" />
     <ClCompile Include="application\rayMarching\RayMarching.cpp" />
     <ClCompile Include="engine\camera\Camera.cpp" />
@@ -166,6 +167,7 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AnimationManager.h" />
     <ClInclude Include="application\railCamera\RailCamera.h" />
     <ClInclude Include="application\rayMarching\RayMarching.h" />
     <ClInclude Include="Blend.h" />
