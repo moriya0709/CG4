@@ -2,15 +2,20 @@
 #include "DirectXCommon.h"
 #include "TextureManager.h"
 #include "SkyBox.h"
+#include "AnimationManager.h"
 
 void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, const std::string& directoryPath, const std::string& filename) {
 	// 引数で受け取ってメンバ変数に記録する
 	modelCommon_ = modelCommon;
 	dxCommon_ = dxCommon;
+	animationManager_ = std::make_unique <AnimationManager>();
 
 	// モデル読み込み
 	modelData = LoadModelFile(directoryPath, filename);
+	// アニメーション読み込み
+	animation_ = animationManager_->LoadAnimationFile(directoryPath, filename);
 
+	// アウトライン用法線生成
 	GenerateOutlineNormal(modelData.vertices);
 
 	// *頂点データ* //
@@ -58,6 +63,11 @@ void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, const 
 	// 番号取得
 	modelData.material.textureIndex = TextureManager::GetInstance()->GetSrvIndex(modelData.material.textureFilePath);
 
+}
+
+void Model::Update() {
+	animationManager_->Play(animation_,modelData);
+	modelData.rootNode.localMatrix = animationManager_->GetLocalMatrix();
 }
 
 void Model::Draw() {

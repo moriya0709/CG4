@@ -22,7 +22,7 @@ void TitleScene::Initialize() {
 	object->SetTranslate({ 0.0f, 0.0f, 0.0f });
 
 	// 初期化済みの3Dオブジェクトにモデルを紐づける
-	object->SetModel("ball.gltf");
+	object->SetModel("AnimatedCube.gltf");
 
 	// パーティクル
 
@@ -82,20 +82,20 @@ void TitleScene::Update() {
 	object->Update();
 
 	// *パーティクル* //
-	if (isTornado) {
-		for (int i = 0; i < kTornadoCount; i++) {
-			tornado[i]->Update();
-		}
-	}
-	particleMesh->Update();
-	particleMesh->Editor();
+	//if (isTornado) {
+	//	for (int i = 0; i < kTornadoCount; i++) {
+	//		tornado[i]->Update();
+	//	}
+	//}
+	//particleMesh->Update();
+	//particleMesh->Editor();
 
-
-	transformParticle.translate = input->GetMouseWorld(camera.get());
+	// マウスのワールド座標変換
+	//transformParticle.translate = input->GetMouseWorld(camera.get());
 
 	// トレイルエフェクト更新
-	trailEffect->AddPoint(transformParticle.translate);
-	trailEffect->SetTranslate(transformParticle.translate);
+	//trailEffect->AddPoint(transformParticle.translate);
+	//trailEffect->SetTranslate(transformParticle.translate);
 	
 	// スカイボックス
 	Skybox::GetInstance()->Update();
@@ -395,7 +395,7 @@ void TitleScene::Draw3D() {
 
 	
 	// 3Dオブジェクト描画
-	//object->Draw();
+	object->Draw();
 
 
 	// アウトライン描画準備

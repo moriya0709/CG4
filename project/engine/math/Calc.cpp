@@ -166,6 +166,43 @@ Matrix4x4 MakeRotateMatrix(const Vector3& rot)
     return matRotZ * matRotX * matRotY;
 }
 
+// Quaternionから回転行列を求める
+Matrix4x4 MakeRotateMatrix(const Quaternion& quaternion) {
+    float xx = quaternion.x * quaternion.x;
+    float yy = quaternion.y * quaternion.y;
+    float zz = quaternion.z * quaternion.z;
+    float xy = quaternion.x * quaternion.y;
+    float xz = quaternion.x * quaternion.z;
+    float yz = quaternion.y * quaternion.z;
+    float wx = quaternion.w * quaternion.x;
+    float wy = quaternion.w * quaternion.y;
+    float wz = quaternion.w * quaternion.z;
+
+    Matrix4x4 mat = {};
+
+    mat.m[0][0] = 1.0f - 2.0f * (yy + zz);
+    mat.m[0][1] = 2.0f * (xy + wz);
+    mat.m[0][2] = 2.0f * (xz - wy);
+    mat.m[0][3] = 0.0f;
+
+    mat.m[1][0] = 2.0f * (xy - wz);
+    mat.m[1][1] = 1.0f - 2.0f * (xx + zz);
+    mat.m[1][2] = 2.0f * (yz + wx);
+    mat.m[1][3] = 0.0f;
+
+    mat.m[2][0] = 2.0f * (xz + wy);
+    mat.m[2][1] = 2.0f * (yz - wx);
+    mat.m[2][2] = 1.0f - 2.0f * (xx + yy);
+    mat.m[2][3] = 0.0f;
+
+    mat.m[3][0] = 0.0f;
+    mat.m[3][1] = 0.0f;
+    mat.m[3][2] = 0.0f;
+    mat.m[3][3] = 1.0f;
+
+    return mat;
+}
+
 Matrix4x4 MakeTranslateMatrix(const Vector3& translate)
 {
     Matrix4x4 result { 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, translate.x, translate.y, translate.z, 1.0f };
@@ -184,6 +221,22 @@ Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rot, const Vecto
     Matrix4x4 matRotZ = MakeRotateZMatrix(rot.z);
     // 回転行列の合成
     Matrix4x4 matRot = matRotZ * matRotX * matRotY;
+
+    // 平行移動行列の作成
+    Matrix4x4 matTrans = MakeTranslateMatrix(translate);
+
+    // スケーリング、回転、平行移動の合成
+    Matrix4x4 matTransform = matScale * matRot * matTrans;
+
+    return matTransform;
+}
+Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Quaternion& quaternion, const Vector3& translate) {
+
+    // スケーリング行列の作成
+    Matrix4x4 matScale = MakeScaleMatrix(scale);
+
+    // 回転行列
+    Matrix4x4 matRot = MakeRotateMatrix(quaternion);
 
     // 平行移動行列の作成
     Matrix4x4 matTrans = MakeTranslateMatrix(translate);
@@ -316,6 +369,30 @@ Vector3 Normalize(const Vector3& v)
     };
 }
 
+Quaternion Normalize(const Quaternion& quaternion) {
+    float norm = std::sqrt(
+        quaternion.x * quaternion.x +
+        quaternion.y * quaternion.y +
+        quaternion.z * quaternion.z +
+        quaternion.w * quaternion.w
+    );
+
+    Quaternion result;
+
+    if (norm == 0.0f) {
+        // 安全策：ゼロ除算を防ぐ
+        result = { 0.0f, 0.0f, 0.0f, 1.0f };  // 単位クォータニオンを返す
+    } else {
+        float inv = 1.0f / norm;
+        result.x = quaternion.x * inv;
+        result.y = quaternion.y * inv;
+        result.z = quaternion.z * inv;
+        result.w = quaternion.w * inv;
+    }
+
+    return result;
+}
+
 float Dot(const Vector3& a, const Vector3& b) {
 	return a.x * b.x + a.y * b.y + a.z * b.z;
 }
@@ -387,6 +464,88 @@ Vector4 Lerp(const Vector4& a, const Vector4& b, float t) {
     result.y = a.y + (b.y - a.y) * t;
     result.z = a.z + (b.z - a.z) * t;
     result.w = a.w + (b.w - a.w) * t;
+    return result;
+}
+
+Vector3 Lerp(const Vector3& a, const Vector3& b, float t) {
+    Vector3 result;
+    result.x = a.x + (b.x - a.x) * t;
+    result.y = a.y + (b.y - a.y) * t;
+    result.z = a.z + (b.z - a.z) * t;
+    return result;
+}
+
+Quaternion Slerp(const Quaternion& q0, const Quaternion& q1, float t) {
+    float dot = q0.x * q1.x + q0.y * q1.y + q0.z * q1.z + q0.w * q1.w;
+
+    Quaternion q1Copy = q1;
+
+    const float epsilon = 1e-6f;
+
+    // 角度が小さい場合は Lerp で近似
+    if (1.0f - dot < epsilon) {
+        Quaternion result = {
+            q0.x + t * (q1Copy.x - q0.x),
+            q0.y + t * (q1Copy.y - q0.y),
+            q0.z + t * (q1Copy.z - q0.z),
+            q0.w + t * (q1Copy.w - q0.w)
+        };
+        return Normalize(result);
+    }
+
+    float theta = std::acos(dot);
+    float sinTheta = std::sin(theta);
+
+    float w0 = std::sin((1.0f - t) * theta) / sinTheta;
+    float w1 = std::sin(t * theta) / sinTheta;
+
+    Quaternion result = {
+        w0 * q0.x + w1 * q1Copy.x,
+        w0 * q0.y + w1 * q1Copy.y,
+        w0 * q0.z + w1 * q1Copy.z,
+        w0 * q0.w + w1 * q1Copy.w
+    };
+
+    // ※コレが重要！
+    return Normalize(result);
+}
+
+Quaternion Lerp(const Quaternion& a, const Quaternion& b, float t) {
+    // 2つのクォータニオンの内積（向きの近さ）を計算
+    float dot = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+
+    // 内積が負の場合、回転が遠回り（180度以上）になってしまうので、
+    // ターゲット(b)の符号を反転させて最短経路にする
+    Quaternion targetB = b;
+    
+
+    // 2つの回転がほぼ同じ向き（または真逆）のときは、0除算を防ぐために通常の直線補間(Lerp)にする
+    if (dot >= 1.0f - 0.0005f) {
+        Quaternion result;
+        result.x = a.x + (targetB.x - a.x) * t;
+        result.y = a.y + (targetB.y - a.y) * t;
+        result.z = a.z + (targetB.z - a.z) * t;
+        result.w = a.w + (targetB.w - a.w) * t; // ⭕ wも計算する！
+
+        // 長さを1にする（正規化）
+        float norm = std::sqrt(result.x * result.x + result.y * result.y + result.z * result.z + result.w * result.w);
+        if (norm > 0.0f) {
+            result.x /= norm; result.y /= norm; result.z /= norm; result.w /= norm;
+        }
+        return result;
+    }
+
+    // 通常のSlerp（球面線形補間）の計算
+    float theta = std::acos(dot);
+    float sinTheta = std::sin(theta);
+    float scale1 = std::sin((1.0f - t) * theta) / sinTheta;
+    float scale2 = std::sin(t * theta) / sinTheta;
+
+    Quaternion result;
+    result.x = scale1 * a.x + scale2 * targetB.x;
+    result.y = scale1 * a.y + scale2 * targetB.y;
+    result.z = scale1 * a.z + scale2 * targetB.z;
+    result.w = scale1 * a.w + scale2 * targetB.w; // ⭕ wも計算する！
     return result;
 }
 

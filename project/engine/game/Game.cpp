@@ -56,13 +56,15 @@ void Game::Initialize() {
 	ParticleManager::GetInstance()->CreateParticleGroup("Tornado7", "Resource/plane", "plane.obj", "Resource/particle/particle.png",0);
 	ParticleManager::GetInstance()->CreateParticleGroup("Tornado8", "Resource/plane", "plane.obj", "Resource/particle/particle.png",0);
 
-	// .objファイルからモデル読み込み
+	// モデル読み込み
 	ModelManager::GetInstance()->LoadModel("Resource/plane","plane.obj");
 	ModelManager::GetInstance()->LoadModel("Resource/axis", "axis.obj");
 	ModelManager::GetInstance()->LoadModel("Resource/ball", "ball.obj");
 	ModelManager::GetInstance()->LoadModel("Resource/emission", "emission.obj");
 	ModelManager::GetInstance()->LoadModel("Resource/terrain", "terrain.obj");
 	ModelManager::GetInstance()->LoadModel("Resource/ball", "ball.gltf");
+	ModelManager::GetInstance()->LoadModel("Resource/cube", "cube.gltf");
+	ModelManager::GetInstance()->LoadModel("Resource/AnimatedCube", "AnimatedCube.gltf");
 
 	// サウンド
 	SoundManager::GetInstance()->Initialize();
