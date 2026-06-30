@@ -261,8 +261,8 @@ Node Model::ReadNode(aiNode* node) {
 	aiQuaternion rotate;
 	node->mTransformation.Decompose(scale, rotate, translate);
 	result.transform.scale = { scale.x,scale.y,scale.z };
-	result.transform.scale = { rotate.x,-rotate.y,-rotate.z }; // x軸を反転、さらに回転方向が逆なので軸を反転させる
-	result.transform.scale = { -translate.x,translate.y,translate.z }; // x軸を反転
+	result.transform.rotate = { rotate.x,-rotate.y,-rotate.z }; // x軸を反転、さらに回転方向が逆なので軸を反転させる
+	result.transform.translate = { -translate.x,translate.y,translate.z }; // x軸を反転
 	result.localMatrix = MakeAffineMatrix(result.transform.scale, result.transform.rotate, result.transform.translate);
 
 	result.name = node->mName.C_Str(); // Node名を格納
