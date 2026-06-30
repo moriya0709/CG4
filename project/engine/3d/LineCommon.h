@@ -6,32 +6,17 @@
 #include <dxcapi.h>
 #include <thread>
 
-class Camera;
 class DirectXCommon;
 
-class ObjectCommon {
+class LineCommon {
 public:
 	// 初期化
 	void Initialize(DirectXCommon* dxCommon);
-
 	// 共通描画設定
-	void SetCommonPipelineState(); // 通常
-	void SetOutlinePipelineState(); // アウトライン
+	void SetCommonPipelineState();
 
 	// シングルトンインスタンスの取得
-	static ObjectCommon* GetInstance();
-
-	// setter
-	void SetDefaultCamera(Camera* camera) { defaultCamera_ = camera; }
-
-	// getter
-	DirectXCommon* GetDxCommon() const { return dxCommon_; }
-	Camera* GetDefaultCamera() const { return defaultCamera_; }
-
-	ObjectCommon() = default;
-	~ObjectCommon() = default;
-	ObjectCommon(ObjectCommon&) = delete;
-	ObjectCommon& operator=(ObjectCommon&) = delete;
+	static LineCommon* GetInstance();
 
 private:
 	// ルートシグネイチャ
@@ -48,17 +33,14 @@ private:
 	Microsoft::WRL::ComPtr <ID3D12PipelineState> outlinePipelineState = nullptr; // アウトライン用
 
 	// シングルトンインスタンス
-	static std::unique_ptr <ObjectCommon> instance;
+	static std::unique_ptr <LineCommon> instance;
 
 	// DirectXCommonのポインタ
 	DirectXCommon* dxCommon_ = nullptr;
-	// デフォルトカメラ
-	Camera* defaultCamera_ = nullptr;
 
 	// ルートシグネイチャの作成
 	void CreateRootSignature();
 	// グラフィックスパイプラインの生成
-	void CreateGraphicsPipeline(); // 通常
-	void CreateGraphicsOutlinePipeline(); // アウトライン用
+	void CreateGraphicsPipeline();
 };
 

@@ -15,11 +15,9 @@
 #include "PostEffect.h"
 #include "RailCamera.h"
 #include "TrailEffect.h"
+#include "Line.h"
 
 using namespace DirectX;
-
-class SpriteCommon;
-class ObjectCommon;
 
 class TitleScene : public BaseScene {
 public:
@@ -150,5 +148,7 @@ private:
 	std::unique_ptr <ParticleEmitter> particleMesh = nullptr;
 	// トレイルエフェクト
 	std::shared_ptr<TrailEffect> trailEffect = std::make_shared<TrailEffect>();
+	
+	std::shared_ptr<Line> line = nullptr;
 
 };

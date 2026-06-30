@@ -2,6 +2,8 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <map>
+#include <optional>
 
 #include "Calc.h"
 
@@ -24,8 +26,19 @@ struct VertexData {
 	Vector3 normal; // 正規化座標
 	Vector3 outlineNormal;   // 第二法線
 };
+struct EulerTransform {
+    Vector3 scale;
+    Vector3 rotate;
+    Vector3 translate;
+};
+struct QuaternionTransform {
+    Vector3 scale;
+    Quaternion rotate;
+    Vector3 translate;
+};
 // ノードデータ
 struct Node {
+    QuaternionTransform transform;
     Matrix4x4 localMatrix; // ローカル変換行列
     std::string name; // ノードの名前
     std::vector<Node> children; // 子ノードのリスト
@@ -63,4 +76,23 @@ struct Material {
     Vector3 burnColor;
     float pad5;
 
+};
+// カメラデータ
+struct ViewData {
+    Vector3 cameraPos;
+    float pad;
+};
+struct Joint {
+    QuaternionTransform transform;  // Transform情報
+    Matrix4x4 localMatrix;
+    Matrix4x4 skeletonSpaceMatrix;  // skeletonSpaceでの変換行列
+    std::string name;               // 名前
+    std::vector<int32_t> children;  // 子JointのIndexのリスト
+    int32_t index;                  // 自身のIndex
+    std::optional<int32_t> parent;  // 親JointのIndex
+};
+struct Skeleton {
+    int32_t root;                               // RootJointのINdex
+    std::map<std::string, int32_t> jointMap;    // Joint名とIndexとの辞書
+    std::vector<Joint> joints;                 // 所属しているジョイント
 };

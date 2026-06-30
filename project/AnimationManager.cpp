@@ -74,7 +74,7 @@ Vector3 AnimationManager::CalculateValue(const std::vector<KeyframeVector3>& key
     }
 
     for (size_t index = 0; index < keyframes.size() - 1; ++index) {
-        size_t nextIndex = index * 1;
+        size_t nextIndex = index + 1;
         // indexとnextIndexの2つのkeyframeを取得して範囲内に時刻があるかを判定
         if (keyframes[index].time <= time && time <= keyframes[nextIndex].time) {
             // 範囲内を補間する

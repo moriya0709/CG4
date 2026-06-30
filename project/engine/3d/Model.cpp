@@ -3,6 +3,9 @@
 #include "TextureManager.h"
 #include "SkyBox.h"
 #include "AnimationManager.h"
+#include "LineCommon.h"
+#include "CameraManager.h"
+#include "Camera.h"
 
 void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, const std::string& directoryPath, const std::string& filename) {
 	// 引数で受け取ってメンバ変数に記録する
@@ -13,7 +16,9 @@ void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, const 
 	// モデル読み込み
 	modelData = LoadModelFile(directoryPath, filename);
 	// アニメーション読み込み
-	animation_ = animationManager_->LoadAnimationFile(directoryPath, filename);
+	animation = animationManager_->LoadAnimationFile(directoryPath, filename);
+	// スケルトン生成
+	skeleton = CreateSkeleton(modelData.rootNode);
 
 	// アウトライン用法線生成
 	GenerateOutlineNormal(modelData.vertices);
@@ -66,8 +71,24 @@ void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, const 
 }
 
 void Model::Update() {
-	animationManager_->Play(animation_,modelData);
-	modelData.rootNode.localMatrix = animationManager_->GetLocalMatrix();
+	// アニメーションが無い、または再生時間が0の時は何もしない
+	if (animation.duration <= 0.0f || animation.nodeAnimations.empty()) {
+		return;
+	}
+
+	// アニメーション更新
+	animationManager_->animationTime += 1.0f / 60.0f;
+	ApplyAnimation(skeleton, animation, animationManager_->animationTime);
+
+	// 全てのJointを更新。親が若いので通常ループで処理可能になっている
+	for (Joint& joint : skeleton.joints) {
+		joint.localMatrix = MakeAffineMatrix(joint.transform.scale, joint.transform.rotate, joint.transform.translate);
+		if (joint.parent) {
+			joint.skeletonSpaceMatrix = joint.localMatrix * skeleton.joints[*joint.parent].skeletonSpaceMatrix;
+		} else {
+			joint.skeletonSpaceMatrix = joint.localMatrix;
+		}
+	}
 }
 
 void Model::Draw() {
@@ -236,14 +257,13 @@ void Model::GenerateOutlineNormal(std::vector<VertexData>& vertices) {
 
 Node Model::ReadNode(aiNode* node) {
 	Node result;
-	aiMatrix4x4 aiLocalMatrix = node->mTransformation; // localMatrix取得
-	aiLocalMatrix.Transpose(); // 列ベクトル形式を行ベクトル形式に転置
-	
-	for (int i = 0; i < 4; ++i) {
-		for(int j = 0; j < 4; ++j){
-			result.localMatrix.m[i][j] = aiLocalMatrix[i][j];
-		}
-	}
+	aiVector3D scale, translate;
+	aiQuaternion rotate;
+	node->mTransformation.Decompose(scale, rotate, translate);
+	result.transform.scale = { scale.x,scale.y,scale.z };
+	result.transform.scale = { rotate.x,-rotate.y,-rotate.z }; // x軸を反転、さらに回転方向が逆なので軸を反転させる
+	result.transform.scale = { -translate.x,translate.y,translate.z }; // x軸を反転
+	result.localMatrix = MakeAffineMatrix(result.transform.scale, result.transform.rotate, result.transform.translate);
 
 	result.name = node->mName.C_Str(); // Node名を格納
 	result.children.resize(node->mNumChildren); // 子供の数だけ確保
@@ -252,4 +272,46 @@ Node Model::ReadNode(aiNode* node) {
 		result.children[childIndex] = ReadNode(node->mChildren[childIndex]);
 	}
 	return result;
+}
+
+Skeleton Model::CreateSkeleton(const Node& rootNode) {
+	Skeleton skeleton;
+	skeleton.root = CreateJoint(rootNode, {}, skeleton.joints);
+
+	// 名前とindexのマッピングを行いアクセスしやすくする
+	for (const Joint& joint : skeleton.joints) {
+		skeleton.jointMap.emplace(joint.name, joint.index);
+	}
+
+	return skeleton;
+}
+
+int32_t Model::CreateJoint(const Node& node, const std::optional<int32_t>& parent, std::vector<Joint>& joints) {
+	Joint joint;
+	joint.name = node.name;
+	joint.localMatrix = node.localMatrix;
+	joint.skeletonSpaceMatrix = MakeIdentity4x4();
+	joint.transform = node.transform;
+	joint.index = int32_t(joints.size()); // 現在登録されている数をINdexに
+	joint.parent = parent;
+	joints.push_back(joint); // SkeletonのJoint列に追加
+	for (const Node& child : node.children) {
+		// 子Jointを生成し、そのIndexを登録
+		int32_t childIndex = CreateJoint(child, joint.index, joints);
+		joints[joint.index].children.push_back(childIndex);
+	}
+	// 自身のIndexを返す
+	return joint.index;
+}
+
+void Model::ApplyAnimation(Skeleton& skeleton, const Animation& animation, float animationTime) {
+	for (Joint& joint : skeleton.joints) {
+		// 対象のJointのAnimationがあれば、値の適用を行う。
+		if (auto it = animation.nodeAnimations.find(joint.name); it != animation.nodeAnimations.end()) {
+			const NodeAnimation& rootNodeAnimation = (*it).second;
+			joint.transform.translate = animationManager_->CalculateValue(rootNodeAnimation.translate.keyframes, animationTime);
+			joint.transform.rotate = animationManager_->CalculateValue(rootNodeAnimation.rotate.keyframes, animationTime);
+			joint.transform.scale = animationManager_->CalculateValue(rootNodeAnimation.scale.keyframes, animationTime);
+		}
+	}
 }

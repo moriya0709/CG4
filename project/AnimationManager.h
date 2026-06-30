@@ -36,21 +36,23 @@ struct Animation {
 
 class AnimationManager {
 public:
+	float animationTime = 0.0f;
+
 	// 再生
 	void Play(Animation animation, ModelData model);
 	// 読み込み
 	Animation LoadAnimationFile(const std::string& directoryPath, const std::string& filename);
 
-	// getter
-	Matrix4x4 GetLocalMatrix() { return localMatrix; }
-
-private:
-	float animationTime = 0.0f;
-	Matrix4x4 localMatrix;
-
 	// 任意の時刻の値を取得
 	Vector3 CalculateValue(const std::vector<KeyframeVector3>& keyframes, float time);
 	Quaternion CalculateValue(const std::vector<KeyframeQuaternion>& keyframes, float time);
 
+	// getter
+	Matrix4x4 GetLocalMatrix() { return localMatrix; }
+
+private:
+	Matrix4x4 localMatrix;
+
+	
 };
 
