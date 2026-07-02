@@ -19,6 +19,7 @@
 #include "SceneManager.h"
 #include "SceneFactory.h"
 #include "Skybox.h"
+#include "LineCommon.h"
 
 class Game : public M_Framework {
 public:

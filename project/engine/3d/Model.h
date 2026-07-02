@@ -29,7 +29,6 @@ public:
 	// 描画
 	void Draw();
 
-
 	// .mtlファイルの読み込み
 	MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& filename);
 	// モデルファイルの読み込み
@@ -40,6 +39,12 @@ public:
 
 	// ノードの読み込み
 	Node ReadNode(aiNode* node);
+	// Skeleton生成
+	Skeleton CreateSkeleton(const Node& rootNode);
+	// Joint生成
+	int32_t CreateJoint(const Node& node, const std::optional<int32_t>& parent, std::vector<Joint>& joints);
+	// アニメーションを適用する
+	void ApplyAnimation(Skeleton& skeleton, const Animation& animation, float animationTime);
 
 	// getter
 	ModelData GetModelData() const { return modelData; }
@@ -51,6 +56,7 @@ private:
 	// バッファリソース
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource;
 	Microsoft::WRL::ComPtr<ID3D12Resource> materialResource;
+	Microsoft::WRL::ComPtr<ID3D12Resource> indexResource;
 
 	// バッファリソース内のデータを指すポインタ
 	VertexData* vertexData = nullptr;
@@ -58,9 +64,13 @@ private:
 
 	// バッファリソースの使い道を補足するバッファビュー
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
+	D3D12_INDEX_BUFFER_VIEW indexBufferView;
 
 	// 環境マップ用テクスチャのファイルパス
 	std::string enviromentTexture;
+
+	// エミッシブが有効か
+	bool isEmissive = false;
 
 	// ModelCommonのポインタ
 	ModelCommon* modelCommon_ = nullptr;
@@ -68,7 +78,9 @@ private:
 	DirectXCommon* dxCommon_ = nullptr;
 	// AnimationManagerのポインタ
 	std::unique_ptr <AnimationManager> animationManager_ = nullptr;
-	Animation animation_;
+	Animation animation;
 
+	// スケルトン
+	Skeleton skeleton;
 };
 

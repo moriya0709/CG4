@@ -12,6 +12,7 @@
 #include "Calc.h"
 #include "RayMarching.h"
 #include "CommonStructs.h"
+#include "Line.h"
 
 class Model;
 class Camera;
@@ -48,11 +49,6 @@ struct SpotLight {
 	float innerCone;    // 内側角度
 	float outerCone;    // 外側角度
 	int isDisplay;
-};
-// カメラデータ
-struct ViewData {
-	Vector3 cameraPos;
-	float pad;
 };
 
 
@@ -158,7 +154,7 @@ private:
 	Camera* camera_ = nullptr;
 	// DirectXCommonのポインタ
 	DirectXCommon* dxCommon_ = nullptr;
-
+	
 	// 空の色をモデルに反映
 	void SunLight();
 

@@ -15,11 +15,9 @@
 #include "PostEffect.h"
 #include "RailCamera.h"
 #include "TrailEffect.h"
+#include "Line.h"
 
 using namespace DirectX;
-
-class SpriteCommon;
-class ObjectCommon;
 
 class TitleScene : public BaseScene {
 public:
@@ -50,8 +48,8 @@ private:
 	// *ライティング* //
 
 	// 平行光
-	bool isDirectionalLight = false;
-	Vector4 DirectionalLightColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+	bool isDirectionalLight = true;
+	Vector4 DirectionalLightColor = { 0.5f, 0.5f, 0.5f, 1.0f };
 	Vector3 DirectionalLightDirection = { 0.0f, -1.0f, 0.0f };
 	float DirectionalLightIntensity = 1.0f;
 	// 環境光
@@ -150,5 +148,7 @@ private:
 	std::unique_ptr <ParticleEmitter> particleMesh = nullptr;
 	// トレイルエフェクト
 	std::shared_ptr<TrailEffect> trailEffect = std::make_shared<TrailEffect>();
+	
+	std::shared_ptr<Line> line = nullptr;
 
 };

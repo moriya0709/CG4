@@ -18,6 +18,9 @@ void Game::Initialize() {
 	// 3dスプライト共通部の初期化
 	ObjectCommon::GetInstance()->Initialize(dxCommon);
 
+	// 線共通部の初期化
+	LineCommon::GetInstance()->Initialize(dxCommon);
+
 	// SRVマネージャ
 	srvManager = std::make_unique<SrvManager>();
 	srvManager->Initialize(dxCommon);
@@ -65,6 +68,7 @@ void Game::Initialize() {
 	ModelManager::GetInstance()->LoadModel("Resource/ball", "ball.gltf");
 	ModelManager::GetInstance()->LoadModel("Resource/cube", "cube.gltf");
 	ModelManager::GetInstance()->LoadModel("Resource/AnimatedCube", "AnimatedCube.gltf");
+	ModelManager::GetInstance()->LoadModel("Resource/human", "walk.gltf");
 
 	// サウンド
 	SoundManager::GetInstance()->Initialize();
