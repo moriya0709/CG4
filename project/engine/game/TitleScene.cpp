@@ -404,7 +404,7 @@ void TitleScene::Draw3D() {
 
 	
 	// 3Dオブジェクト描画
-	//object->Draw();
+	object->Draw();
 
 
 	// アウトライン描画準備

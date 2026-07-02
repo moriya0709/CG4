@@ -48,8 +48,8 @@ private:
 	// *ライティング* //
 
 	// 平行光
-	bool isDirectionalLight = false;
-	Vector4 DirectionalLightColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+	bool isDirectionalLight = true;
+	Vector4 DirectionalLightColor = { 0.5f, 0.5f, 0.5f, 1.0f };
 	Vector3 DirectionalLightDirection = { 0.0f, -1.0f, 0.0f };
 	float DirectionalLightIntensity = 1.0f;
 	// 環境光

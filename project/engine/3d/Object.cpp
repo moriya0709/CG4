@@ -104,7 +104,7 @@ void Object::Update() {
 
 	// 通常通り、現在のワールド行列を計算
 	Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
-	transformationMatrixData->World = worldMatrix * camera_->GetViewProjectionMatrix();
+	transformationMatrixData->World = worldMatrix;
 
 	// 現在のWVP行列を計算
 	currentWVP_ = Multiply(worldMatrix, camera_->GetViewProjectionMatrix());

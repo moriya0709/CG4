@@ -56,6 +56,7 @@ private:
 	// バッファリソース
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource;
 	Microsoft::WRL::ComPtr<ID3D12Resource> materialResource;
+	Microsoft::WRL::ComPtr<ID3D12Resource> indexResource;
 
 	// バッファリソース内のデータを指すポインタ
 	VertexData* vertexData = nullptr;
@@ -63,9 +64,13 @@ private:
 
 	// バッファリソースの使い道を補足するバッファビュー
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
+	D3D12_INDEX_BUFFER_VIEW indexBufferView;
 
 	// 環境マップ用テクスチャのファイルパス
 	std::string enviromentTexture;
+
+	// エミッシブが有効か
+	bool isEmissive = false;
 
 	// ModelCommonのポインタ
 	ModelCommon* modelCommon_ = nullptr;

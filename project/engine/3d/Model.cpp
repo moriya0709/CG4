@@ -6,6 +6,7 @@
 #include "LineCommon.h"
 #include "CameraManager.h"
 #include "Camera.h"
+#include <assimp/vector3.h>
 
 void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, const std::string& directoryPath, const std::string& filename) {
 	// 引数で受け取ってメンバ変数に記録する
@@ -46,8 +47,12 @@ void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, const 
 	materialData->enableLighting = true;
 	materialData->enableToonShading = true;
 	materialData->uvTransform = MakeIdentity4x4();
-	// ★ mtlから読んだ自己発光カラーを代入！
-	materialData->emissive = modelData.material.emissive;
+
+	if (isEmissive) {
+		materialData->emissive = modelData.material.emissive;
+	} else {
+		materialData->emissive = {0.0f,0.0f,0.0f};
+	}
 
 	// ハイライト
 	materialData->shininess = 70.0f;
@@ -60,6 +65,17 @@ void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, const 
 	enviromentTexture = "Resource/rostock_laage_airport_4k.dds";
 	TextureManager::GetInstance()->LoadTexture(enviromentTexture);
 	materialData->environmentCoefficient = 0.0f;
+	
+	// *インデックス* //
+	indexResource = dxCommon_->CreateBufferResource(sizeof(uint32_t) * modelData.indices.size());
+	indexBufferView.BufferLocation = indexResource->GetGPUVirtualAddress();
+	indexBufferView.SizeInBytes = UINT(sizeof(uint32_t) * modelData.indices.size());
+	indexBufferView.Format = DXGI_FORMAT_R32_UINT;
+	
+	uint32_t* mappedIndex = nullptr;
+	indexResource->Map(0, nullptr, reinterpret_cast<void**>(&mappedIndex));
+	std::memcpy(mappedIndex, modelData.indices.data(), sizeof(uint32_t) * modelData.indices.size());
+
 
 	// *テクスチャ* //
 
@@ -95,6 +111,8 @@ void Model::Draw() {
 
 	// RootSignatureを設定。PSOに設定しているけど別途設定が必要
 	dxCommon_->GetCommandList()->IASetVertexBuffers(0, 1, &vertexBufferView); // VBVを設定
+	// インデックスバッファビューを設定
+	dxCommon_->GetCommandList()->IASetIndexBuffer(&indexBufferView);
 
 	// マテリアルCBufferの場所を設定
 	dxCommon_->GetCommandList()->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
@@ -104,7 +122,7 @@ void Model::Draw() {
 	dxCommon_->GetCommandList()->SetGraphicsRootDescriptorTable(10, TextureManager::GetInstance()->GetSrvHandleGPU(enviromentTexture));
 
 	// 描画
-	dxCommon_->GetCommandList()->DrawInstanced(static_cast<UINT>(modelData.vertices.size()), 1, 0, 0);
+	dxCommon_->GetCommandList()->DrawIndexedInstanced(static_cast<UINT>(modelData.indices.size()), 1, 0, 0, 0);
 
 }
 
@@ -127,7 +145,6 @@ MaterialData Model::LoadMaterialTemplateFile(const std::string& directoryPath, c
 			materialData.textureFilePath =
 				directoryPath + "/" + textureFilename;
 		}
-
 		// エミッシブカラー
 		else if (identifier == "Ke") {
 			s >> materialData.emissive.x
@@ -184,34 +201,26 @@ ModelData Model::LoadModelFile(const std::string& directoryPath, const std::stri
 		aiMesh* mesh = scene->mMeshes[meshIndex];
 		assert(mesh->HasNormals()); // 法線がないMeshは非対応
 		assert(mesh->HasTextureCoords(0)); // TexcoordがないMeshは非対応
+		modelData.vertices.resize(mesh->mNumVertices);
+		for (uint32_t vertexIndex = 0; vertexIndex < mesh->mNumVertices; ++vertexIndex) {
+			aiVector3D& position = mesh->mVertices[vertexIndex];
+			aiVector3D& normal = mesh->mNormals[vertexIndex];
+			aiVector3D& texcoord = mesh->mTextureCoords[0][vertexIndex];
+			// 右手系→左手系に変換して代入
+			modelData.vertices[vertexIndex].position = {-position.x, position.y, position.z, 1.0f};
+			modelData.vertices[vertexIndex].normal = {-normal.x, normal.y, normal.z};
+			modelData.vertices[vertexIndex].texcoord = { texcoord.x, texcoord.y };
+		}
 
-		// faceを解析する
+		// インデックス解析
 		for (uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex) {
 			aiFace& face = mesh->mFaces[faceIndex];
+			assert(face.mNumIndices == 3); // 三角形以外は非対応
 
-			// Vertexを解析する
-			for(uint32_t element = 0; element < face.mNumIndices; ++element){
+			for (uint32_t element = 0; element < face.mNumIndices; ++element) {
 				uint32_t vertexIndex = face.mIndices[element];
-				aiVector3D& position = mesh->mVertices[vertexIndex];
-				aiVector3D& normal = mesh->mNormals[vertexIndex];
-				aiVector3D& texcoord = mesh->mTextureCoords[0][vertexIndex];
-				VertexData vertex;
-				vertex.position = { position.x, position.y, position.z, 1.0f };
-				vertex.normal = { normal.x, normal.y, normal.z };
-				vertex.texcoord = { texcoord.x,texcoord.y };
-				// aiProcess_MakeLeftHandedはz*=-1で、右手->左手に変換するので手動で対処
-				vertex.position.z *= -1.0f;
-				vertex.normal.z *= -1.0f;
-
-				if (isGLTF) {
-					// glTFの左右反転を直すためにU座標を反転
-					vertex.texcoord.x = 1.0f - vertex.texcoord.x;
-				}
-
-				modelData.vertices.push_back(vertex);
-
+				modelData.indices.push_back(vertexIndex);
 			}
-
 		}
 
 
@@ -220,10 +229,24 @@ ModelData Model::LoadModelFile(const std::string& directoryPath, const std::stri
 	// マテリアルを解析する
 	for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
 		aiMaterial* material = scene->mMaterials[materialIndex];
+		// ディフューズテクスチャの取得
 		if (material->GetTextureCount(aiTextureType_DIFFUSE) != 0) {
 			aiString textureFilePath;
 			material->GetTexture(aiTextureType_DIFFUSE, 0, &textureFilePath);
 			modelData.material.textureFilePath = directoryPath + "/" + textureFilePath.C_Str();
+		}
+
+		// エミッシブの取得
+		aiColor3D emissiveColor(0.0f, 0.0f, 0.0f);
+		if (material->Get(AI_MATKEY_COLOR_EMISSIVE, emissiveColor) == AI_SUCCESS) {
+			if (emissiveColor.r > 0.0f || emissiveColor.g > 0.0f || emissiveColor.b > 0.0f) {
+				modelData.material.emissive.x = emissiveColor.r;
+				modelData.material.emissive.y = emissiveColor.g;
+				modelData.material.emissive.z = emissiveColor.b;
+
+				// エミッシブを有効
+				isEmissive = true;
+			}
 		}
 	}
 
