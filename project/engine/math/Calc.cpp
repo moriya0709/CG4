@@ -616,3 +616,16 @@ Vector3 Cross(const Vector3& a, const Vector3& b) {
         a.x * b.y - a.y * b.x
     );
 }
+
+Matrix4x4 Transpose(const Matrix4x4& mat) {
+    Matrix4x4 result;
+
+    // 行と列を入れ替えて代入する
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            result.m[i][j] = mat.m[j][i];
+        }
+    }
+
+    return result;
+}

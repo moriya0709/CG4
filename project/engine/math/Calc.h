@@ -155,3 +155,5 @@ float DistanceSquared(const Vector3& a, const Vector3& b);
 float Distance(const Vector3& a, const Vector3& b);
 // 外積
 Vector3 Cross(const Vector3& a, const Vector3& b);
+// 転置行列を返す関数
+Matrix4x4 Transpose(const Matrix4x4& mat);

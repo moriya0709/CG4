@@ -15,7 +15,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="AnimationManager.cpp" />
+    <ClCompile Include="engine\3d\AnimationManager.cpp" />
     <ClCompile Include="application\railCamera\RailCamera.cpp" />
     <ClCompile Include="application\rayMarching\RayMarching.cpp" />
     <ClCompile Include="engine\camera\Camera.cpp" />
@@ -183,9 +183,17 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
+    <FxCompile Include="Resource\shaders\SkinningObject3d.VS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Development|x64'">Vertex</ShaderType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="AnimationManager.h" />
+    <ClInclude Include="engine\3d\AnimationManager.h" />
     <ClInclude Include="application\railCamera\RailCamera.h" />
     <ClInclude Include="application\rayMarching\RayMarching.h" />
     <ClInclude Include="Blend.h" />
@@ -257,6 +265,7 @@
     <None Include="Resource\shaders\Particle.hlsli" />
     <None Include="Resource\shaders\Sprite.hlsli" />
     <None Include="Resource\shaders\Skybox.hlsli" />
+    <None Include="Resource\shaders\SkinningObject3d.hlsli" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

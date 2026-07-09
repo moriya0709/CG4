@@ -33,7 +33,7 @@ void Game::Initialize() {
 	// テクスチャマネージャの初期化
 	TextureManager::GetInstance()->Initialize(dxCommon, srvManager.get());
 	// 3Dモデルマネージャの初期化
-	ModelManager::GetInstance()->Initialize(dxCommon);
+	ModelManager::GetInstance()->Initialize(dxCommon, srvManager.get());
 	// Particleマネージャ
 	ParticleManager::GetInstance()->Initialize(dxCommon, srvManager.get(), "Resource/plane", "plane.obj");
 

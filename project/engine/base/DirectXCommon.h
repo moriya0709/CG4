@@ -77,6 +77,7 @@ public:
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDSVHandle() const { return dsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(); }
 	D3D12_CPU_DESCRIPTOR_HANDLE GetBackBufferRTVHandle();
 	ID3D12Resource* GetDepthStencilResource() const { return depthStencilResource.Get(); }
+	uint32_t GetSrvDescriptorSize() const { return descriptorSizeSRV; }
 
 	// デスクリプタヒープ生成
 	Microsoft::WRL::ComPtr <ID3D12DescriptorHeap> CreateDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE heapType, UINT numDescriptors, bool shaderVisible);
@@ -99,6 +100,12 @@ public:
 	Microsoft::WRL::ComPtr<ID3D12Resource> UploadTextureData(const Microsoft::WRL::ComPtr<ID3D12Resource>& texture, const DirectX::ScratchImage& mipImages);
 	// テクスチャファイルの読み込み
 	static DirectX::ScratchImage LoadTexture(const std::string& filePath);
+
+	// 指定番号のCPUデスクリプタハンドルを取得
+	static D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& descriptorHeap, uint32_t descriptorSize, uint32_t index);
+	// 指定番号のGPUデスクリプタハンドルを取得
+	static D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& descriptorHeap, uint32_t descriptorSize, uint32_t index);
+
 
 private:
 	// DirectX12デバイス
@@ -151,11 +158,6 @@ private:
 
 	// WindowAPI
 	WindowAPI* windowAPI_ = nullptr;
-
-	// 指定番号のCPUデスクリプタハンドルを取得
-	static D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& descriptorHeap, uint32_t descriptorSize, uint32_t index);
-	// 指定番号のGPUデスクリプタハンドルを取得
-	static D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& descriptorHeap, uint32_t descriptorSize, uint32_t index);
 
 	// FPS固定初期化
 	void InitializeFixFPS();

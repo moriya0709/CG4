@@ -4,6 +4,7 @@
 #include "Camera.h"
 #include "CameraManager.h"
 #include "DirectXCommon.h"
+#include "ObjectCommon.h"
 
 void Object::Initialize(Camera* camera) {
 	// 引数で受け取ってメンバ変数に記録する
@@ -119,6 +120,14 @@ void Object::Update() {
 }
 
 void Object::Draw() {
+	if (model_->IsSkinning()) {
+		// アニメーション
+		ObjectCommon::GetInstance()->SetAnimationPipelineState();
+	} else {
+		// 3Dオブジェクトの描画準備
+		ObjectCommon::GetInstance()->SetCommonPipelineState();
+	}
+
 	// wvp用とWorld用のCBufferの場所を設定
 	dxCommon_->GetCommandList()->SetGraphicsRootConstantBufferView(1, transformationMatrixResource->GetGPUVirtualAddress());
 	// アウトライン
@@ -136,6 +145,12 @@ void Object::Draw() {
 	// モーションブラー
 	dxCommon_->GetCommandList()->SetGraphicsRootConstantBufferView(9, motionBlurResource->GetGPUVirtualAddress());
 
+	if (model_->IsSkinning()) {
+		dxCommon_->GetCommandList()->SetGraphicsRootShaderResourceView(
+			11, // ★スキニング用ルートシグネチャでの MatrixPalette のプロパティ番号
+			model_->GetSkinCluster().paletteResource->GetGPUVirtualAddress()
+		);
+	}
 
 	// 3Dモデルが割り当てられていれば描画する
 	if (model_) {
