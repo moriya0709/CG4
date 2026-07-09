@@ -1,11 +1,17 @@
 ﻿#pragma once
+#include <windows.h>
 #include <cstdint>
 #include <string>
 #include <vector>
 #include <map>
 #include <optional>
+#include <span>
+#include <array>
+#include <wrl.h>
+#include <D3d12.h>
 
 #include "Calc.h"
+#include <utility>
 
 // 座標変換行列データ
 struct TransformationMatrix {
@@ -43,8 +49,17 @@ struct Node {
     std::string name; // ノードの名前
     std::vector<Node> children; // 子ノードのリスト
 };
+struct VertexWeightData {
+    float weight;
+    uint32_t vertexIndex;
+};
+struct JointWeightData {
+    Matrix4x4 inverseBindPoseMatrix;
+    std::vector<VertexWeightData> vertexWeights;
+};
 // モデルデータ
 struct ModelData {
+    std::map<std::string, JointWeightData> skinClusterData;
 	std::vector<VertexData> vertices;
 	std::vector<uint32_t> indices;
 	MaterialData material;
@@ -96,4 +111,22 @@ struct Skeleton {
     int32_t root;                               // RootJointのINdex
     std::map<std::string, int32_t> jointMap;    // Joint名とIndexとの辞書
     std::vector<Joint> joints;                 // 所属しているジョイント
+};
+const uint32_t kNumMaxInfluence = 4;
+struct VertexInfluence {
+    std::array<float, kNumMaxInfluence> weights;
+    std::array<int32_t, kNumMaxInfluence> jointIndices;
+};
+struct WellForGPU {
+    Matrix4x4 skeletonSpaceMatrix; // 位置用
+	Matrix4x4 skeletonSpaceInverseTransposeMatrix; // 法線用
+};
+struct SkinCluster {
+    std::vector<Matrix4x4> inverseBindPoseMatrices;
+    Microsoft::WRL::ComPtr<ID3D12Resource> influeceResouce;
+    D3D12_VERTEX_BUFFER_VIEW influenceBufferView;
+    std::span<VertexInfluence> mappedInfluence;
+    Microsoft::WRL::ComPtr<ID3D12Resource> paletteResource;
+    std::span<WellForGPU> mappedPalette;
+    std::pair<D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> paletteSrvHandle;
 };

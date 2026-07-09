@@ -6,11 +6,12 @@
 class Model;
 class ModelCommon;
 class DirectXCommon;
+class SrvManager;
 
 class ModelManager {
 public:
 	// 初期化
-	void Initialize(DirectXCommon* dxCommon);
+	void Initialize(DirectXCommon* dxCommon, SrvManager* srvManager);
 
 	// シングルトンインスタンスの取得
 	static ModelManager* GetInstance();
@@ -35,6 +36,8 @@ private:
 	ModelCommon* modelCommon = nullptr;
 	// DirectXCommonのポインタ
 	DirectXCommon* dxCommon_ = nullptr;
+	// SrvManagerのポインタ
+	SrvManager* srvManager_ = nullptr;
 
 };
 

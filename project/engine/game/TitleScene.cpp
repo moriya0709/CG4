@@ -400,12 +400,17 @@ void TitleScene::Draw3D() {
 	//Skybox::GetInstance()->Draw();
 
 	// 3Dオブジェクトの描画準備
-	ObjectCommon::GetInstance()->SetCommonPipelineState();
+	//ObjectCommon::GetInstance()->SetCommonPipelineState();
 
 	
 	// 3Dオブジェクト描画
-	object->Draw();
+	//object->Draw();
 
+	// アニメーション
+	//ObjectCommon::GetInstance()->SetAnimationPipelineState();
+
+	// 3Dオブジェクト描画
+	object->Draw();
 
 	// アウトライン描画準備
 	ObjectCommon::GetInstance()->SetOutlinePipelineState();
