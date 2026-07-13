@@ -7,6 +7,7 @@
 #include "CameraManager.h"
 #include "Camera.h"
 #include "SrvManager.h"
+#include "ObjectCommon.h"
 #include <assimp/vector3.h>
 #include <assimp/matrix4x4.h>
 #include <assimp/quaternion.h>
@@ -32,15 +33,46 @@ void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, SrvMan
 
 	// *頂点データ* //
 
-	// リソース
-	vertexResource = dxCommon_->CreateBufferResource(sizeof(VertexData) * modelData.vertices.size());
-	// バッファリソース
-	vertexBufferView.BufferLocation = vertexResource->GetGPUVirtualAddress();
+	// ⚠️ Initialize関数内の「*頂点データ*」部分を以下のように書き換えます
+// 【入力用】変形前の頂点リソース（SRV用構造化バッファ）
+	inputVertexResource = dxCommon_->CreateBufferResource(sizeof(VertexData) * modelData.vertices.size());
+	VertexData* mappedInput = nullptr;
+	inputVertexResource->Map(0, nullptr, reinterpret_cast<void**>(&mappedInput));
+	std::memcpy(mappedInput, modelData.vertices.data(), sizeof(VertexData) * modelData.vertices.size());
+
+	// ⭕ 修正後: DirectXのAPIを直接叩いてUAV用のフラグ付きで作成する
+	D3D12_HEAP_PROPERTIES heapProps{};
+	heapProps.Type = D3D12_HEAP_TYPE_DEFAULT; // UAVはGPU側で読み書きするため DEFAULT ヒープを使用
+
+	D3D12_RESOURCE_DESC resourceDesc{};
+	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	resourceDesc.Width = sizeof(VertexData) * modelData.vertices.size(); // バッファ全体のサイズ
+	resourceDesc.Height = 1;
+	resourceDesc.DepthOrArraySize = 1;
+	resourceDesc.MipLevels = 1;
+	resourceDesc.SampleDesc.Count = 1;
+	resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	// ★最重要: コンピュートシェーダーからの書き込み（UAV）を許可するフラグ
+	resourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+	HRESULT hr = dxCommon_->GetDevice()->CreateCommittedResource(
+		&heapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&resourceDesc,
+		D3D12_RESOURCE_STATE_COMMON, // または D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+		nullptr,
+		IID_PPV_ARGS(&outputVertexResource)
+	);
+	assert(SUCCEEDED(hr));
+	// 描画で使う頂点バッファビュー(vertexBufferView)のターゲットを出力用(outputVertexResource)にしておく
+	vertexBufferView.BufferLocation = outputVertexResource->GetGPUVirtualAddress();
 	vertexBufferView.SizeInBytes = UINT(sizeof(VertexData) * modelData.vertices.size());
 	vertexBufferView.StrideInBytes = sizeof(VertexData);
-	// 書き込む
-	vertexResource->Map(0, nullptr, reinterpret_cast<void**>(&vertexData));
-	std::memcpy(vertexData, modelData.vertices.data(), sizeof(VertexData) * modelData.vertices.size());
+
+	// 【定数バッファ】4番用のSkinningInfoの作成
+	skinningInfoResource = dxCommon_->CreateBufferResource(sizeof(SkinningInfo));
+	skinningInfoResource->Map(0, nullptr, reinterpret_cast<void**>(&skinningInfoData));
+	skinningInfoData->vertexCount = static_cast<uint32_t>(modelData.vertices.size());
 
 	// *マテリアル* //
 
@@ -84,6 +116,9 @@ void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, SrvMan
 
 	// スキンクラスター
 	skinCluster = CreateSkinCluster(dxCommon_->GetDevice(), skeleton, modelData, dxCommon_->GetSrvHeap(), dxCommon_->GetSrvDescriptorSize());
+	// UAV生成
+	CreateUav();
+
 
 	// *テクスチャ* //
 
@@ -125,12 +160,13 @@ void Model::Update() {
 			Transpose(Inverse(skinCluster.mappedPalette[jointIndex].skeletonSpaceMatrix));
 	}
 
+	DispatchSkinning();
 }
 
 void Model::Draw() {
 
 	// RootSignatureを設定。PSOに設定しているけど別途設定が必要
-	if (IsSkinning()) { // ※もしクラス内に IsSkinning() などの判定メンバがあればそれを使用してください
+	if (IsSkinning()) {
 		D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {
 			vertexBufferView,
 			skinCluster.influenceBufferView
@@ -384,14 +420,18 @@ int32_t Model::CreateJoint(const Node& node, const std::optional<int32_t>& paren
 SkinCluster Model::CreateSkinCluster(const Microsoft::WRL::ComPtr<ID3D12Device>& device, const Skeleton& skeleton, const ModelData& modelData, const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& descriptorHeap, uint32_t descriptorSize) {
 	SkinCluster skinCluster;
 
+	paletteSrvIndex_ = srvManager_->Allocate(1);
+	inputVertexSrvIndex_ = srvManager_->Allocate(1);
+	influenceSrvIndex_ = srvManager_->Allocate(1);
+	outputVertexUavIndex_ = srvManager_->Allocate(1);
+
 	// palette用のResourceを確保
 	skinCluster.paletteResource = dxCommon_->CreateBufferResource(sizeof(WellForGPU) * skeleton.joints.size());
 	WellForGPU* mappedPalette = nullptr;
 	skinCluster.paletteResource->Map(0, nullptr, reinterpret_cast<void**>(&mappedPalette));
 	skinCluster.mappedPalette = { mappedPalette,skeleton.joints.size() }; // spanを使ってアクセスするようにする
-	srvIndex_ = srvManager_->Allocate(1); // インデックス確保
-	skinCluster.paletteSrvHandle.first = dxCommon_->GetCPUDescriptorHandle(descriptorHeap, descriptorSize, srvIndex_);
-	skinCluster.paletteSrvHandle.second = dxCommon_->GetGPUDescriptorHandle(descriptorHeap, descriptorSize, srvIndex_);
+	skinCluster.paletteSrvHandle.first = dxCommon_->GetCPUDescriptorHandle(descriptorHeap, descriptorSize, paletteSrvIndex_);
+	skinCluster.paletteSrvHandle.second = dxCommon_->GetGPUDescriptorHandle(descriptorHeap, descriptorSize, paletteSrvIndex_);
 
 	// palette用のsrvを生成
 	D3D12_SHADER_RESOURCE_VIEW_DESC paletteSrvDesc{};
@@ -403,6 +443,26 @@ SkinCluster Model::CreateSkinCluster(const Microsoft::WRL::ComPtr<ID3D12Device>&
 	paletteSrvDesc.Buffer.NumElements = UINT(skeleton.joints.size());
 	paletteSrvDesc.Buffer.StructureByteStride = sizeof(WellForGPU);
 	dxCommon_->GetDevice()->CreateShaderResourceView(skinCluster.paletteResource.Get(), &paletteSrvDesc, skinCluster.paletteSrvHandle.first);
+
+	// inputVertex用のSRVを生成
+	D3D12_SHADER_RESOURCE_VIEW_DESC inputSrvDesc{};
+	inputSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	inputSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	inputSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	inputSrvDesc.Buffer.NumElements = UINT(modelData.vertices.size());
+	inputSrvDesc.Buffer.StructureByteStride = sizeof(VertexData);
+	dxCommon_->GetDevice()->CreateShaderResourceView(inputVertexResource.Get(), &inputSrvDesc,
+		dxCommon_->GetCPUDescriptorHandle(descriptorHeap, descriptorSize, inputVertexSrvIndex_));
+
+	// influence用のSRVを生成
+	D3D12_SHADER_RESOURCE_VIEW_DESC influenceSrvDesc{};
+	influenceSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	influenceSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	influenceSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	influenceSrvDesc.Buffer.NumElements = UINT(modelData.vertices.size());
+	influenceSrvDesc.Buffer.StructureByteStride = sizeof(VertexInfluence);
+	dxCommon_->GetDevice()->CreateShaderResourceView(skinCluster.influeceResouce.Get(), &influenceSrvDesc,
+		dxCommon_->GetCPUDescriptorHandle(descriptorHeap, descriptorSize, influenceSrvIndex_));
 
 	// influence用のResourceを確保
 	skinCluster.influeceResouce = dxCommon_->CreateBufferResource(sizeof(VertexInfluence) * modelData.vertices.size());
@@ -476,4 +536,60 @@ void Model::ApplyAnimation(Skeleton& skeleton, const Animation& animation, float
 			joint.transform.scale = animationManager_->CalculateValue(rootNodeAnimation.scale.keyframes, animationTime);
 		}
 	}
+}
+
+void Model::CreateUav() {
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
+	uavDesc.Format = DXGI_FORMAT_UNKNOWN;
+	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+	uavDesc.Buffer.FirstElement = 0;
+	uavDesc.Buffer.NumElements = static_cast<UINT>(modelData.vertices.size());
+	uavDesc.Buffer.CounterOffsetInBytes = 0;
+	uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+	uavDesc.Buffer.StructureByteStride = sizeof(VertexData);
+
+	// 第二引数は今はnullptrにしておく
+	dxCommon_->GetDevice()->CreateUnorderedAccessView(
+		outputVertexResource.Get(), nullptr, &uavDesc,
+		dxCommon_->GetCPUDescriptorHandle(dxCommon_->GetSrvHeap(), dxCommon_->GetSrvDescriptorSize(), outputVertexUavIndex_)
+	);
+
+}
+
+void Model::DispatchSkinning() {
+	// スキニングの必要がなければスキップ
+	if (!IsSkinning()) return;
+
+	auto commandList = dxCommon_->GetCommandList();
+	auto srvHeap = dxCommon_->GetSrvHeap();
+
+	// ディスクリプタヒープをセットする
+	ID3D12DescriptorHeap* descriptorHeaps[] = { srvHeap };
+	commandList->SetDescriptorHeaps(1, descriptorHeaps);
+
+	// パイプラインとルートシグネチャを設定
+	auto objectCommon = ObjectCommon::GetInstance();
+	commandList->SetComputeRootSignature(objectCommon->GetComputeRootSignature());
+	commandList->SetPipelineState(objectCommon->GetComputePipelineState());
+
+	// palette (SRV)
+	commandList->SetComputeRootDescriptorTable(0, skinCluster.paletteSrvHandle.second);
+	// inputVertex (SRV)
+	commandList->SetComputeRootDescriptorTable(1, dxCommon_->GetGPUDescriptorHandle(srvHeap, dxCommon_->GetSrvDescriptorSize(), inputVertexSrvIndex_));
+	// influence (SRV)
+	commandList->SetComputeRootDescriptorTable(2, dxCommon_->GetGPUDescriptorHandle(srvHeap, dxCommon_->GetSrvDescriptorSize(), influenceSrvIndex_));
+	// outputVertex (UAV)
+	commandList->SetComputeRootDescriptorTable(3, dxCommon_->GetGPUDescriptorHandle(srvHeap, dxCommon_->GetSrvDescriptorSize(), outputVertexUavIndex_));
+	// skinningInformation (CBV)
+	commandList->SetComputeRootConstantBufferView(4, skinningInfoResource->GetGPUVirtualAddress());
+
+	// 計算実行
+	uint32_t numGroup = (static_cast<uint32_t>(modelData.vertices.size()) + 1023) / 1024;
+	commandList->Dispatch(numGroup, 1, 1);
+
+	// 計算終了のバリア
+	D3D12_RESOURCE_BARRIER barrier{};
+	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+	barrier.UAV.pResource = outputVertexResource.Get();
+	commandList->ResourceBarrier(1, &barrier);
 }
