@@ -28,6 +28,8 @@ public:
 	// getter
 	DirectXCommon* GetDxCommon() const { return dxCommon_; }
 	Camera* GetDefaultCamera() const { return defaultCamera_; }
+	ID3D12RootSignature* GetComputeRootSignature()const { return computeRootSignature.Get(); }
+	ID3D12PipelineState* GetComputePipelineState()const {return computePipelineState.Get(); }
 
 	ObjectCommon() = default;
 	~ObjectCommon() = default;
@@ -38,17 +40,22 @@ private:
 	// ルートシグネイチャ
 	Microsoft::WRL::ComPtr <ID3D12RootSignature> rootSignature = nullptr;
 	Microsoft::WRL::ComPtr <ID3D12RootSignature> animationRootSignature = nullptr;
+	Microsoft::WRL::ComPtr <ID3D12RootSignature> computeRootSignature = nullptr;
 	D3D12_INPUT_LAYOUT_DESC inputLayoutDesc{};
 	D3D12_INPUT_ELEMENT_DESC inputElementDescs[6] = {};
 	Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = nullptr;
 	Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob = nullptr;
+	Microsoft::WRL::ComPtr<IDxcBlob> computeShaderBlob = nullptr;
 	D3D12_BLEND_DESC blendDesc{};
 	D3D12_RASTERIZER_DESC rasterizerDesc{};
 
 	// グラフィックスパイプライン
-	Microsoft::WRL::ComPtr <ID3D12PipelineState> graphicsPipelineState = nullptr;
-	Microsoft::WRL::ComPtr <ID3D12PipelineState> animationPipelineState = nullptr;
-	Microsoft::WRL::ComPtr <ID3D12PipelineState> outlinePipelineState = nullptr; // アウトライン用
+	Microsoft::WRL::ComPtr <ID3D12PipelineState> graphicsPipelineState = nullptr;	// 通常
+	Microsoft::WRL::ComPtr <ID3D12PipelineState> animationPipelineState = nullptr;	// アニメーション
+	Microsoft::WRL::ComPtr <ID3D12PipelineState> outlinePipelineState = nullptr;	// アウトライン用
+
+	// コンピュートパイプライン
+	Microsoft::WRL::ComPtr <ID3D12PipelineState> computePipelineState = nullptr;
 
 	// シングルトンインスタンス
 	static std::unique_ptr <ObjectCommon> instance;
@@ -61,9 +68,15 @@ private:
 	// ルートシグネイチャの作成
 	void CreateRootSignature();				// 通常
 	void CreateAnimationRootSignature();	// アニメーション
+	void CreateComputeRootSignature();		// コンピュート
 	// グラフィックスパイプラインの生成
-	void CreateGraphicsPipeline(); // 通常
+	void CreateGraphicsPipeline();			// 通常
 	void CreateGraphicsAnimationPipeline(); // アニメーション
-	void CreateGraphicsOutlinePipeline(); // アウトライン用
+	void CreateGraphicsOutlinePipeline();	// アウトライン用
+	// コンピュートパイプラインの生成
+	void CreateComputePipeline();
+
+	// 
+
 };
 

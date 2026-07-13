@@ -10,10 +10,13 @@ void ObjectCommon::Initialize(DirectXCommon* dxCommon) {
 	// ルートシグネイチャの作成
 	CreateRootSignature();			// 通常
 	CreateAnimationRootSignature();	// アニメーション
+	CreateComputeRootSignature();	// コンピュート
 	// グラフィックスパイプラインの生成
 	CreateGraphicsPipeline();			// 通常
 	CreateGraphicsAnimationPipeline();	// アニメーション
 	CreateGraphicsOutlinePipeline();	// アウトライン用
+	// コンピュートパイプラインの生成
+	CreateComputePipeline();
 }
 
 // 共通描画設定
@@ -174,7 +177,7 @@ void ObjectCommon::CreateAnimationRootSignature() {
 	D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
 	descriptorRange[0].BaseShaderRegister = 0; // 0から始まる
 	descriptorRange[0].NumDescriptors = 1;
-	descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; // SRVを使う
+	descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 	descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND; // offsetを自動計算
 
 	// 環境マップ用
@@ -191,7 +194,7 @@ void ObjectCommon::CreateAnimationRootSignature() {
 	// RootParameter作成
 	D3D12_ROOT_PARAMETER rootParameters[12] = {};
 	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う
-	rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // PixelShaderで使う
+	rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 	rootParameters[0].Descriptor.ShaderRegister = 0; // レジスタ番号０とバインド
 	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う
 	rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX; // PixelShaderで使う
@@ -292,7 +295,7 @@ void ObjectCommon::CreateAnimationRootSignature() {
 	inputElementDescs[3].SemanticName = "NORMAL";
 	inputElementDescs[3].SemanticIndex = 1;
 	inputElementDescs[3].Format = DXGI_FORMAT_R32G32B32_FLOAT;
-	inputElementDescs[3].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT; // 👈 追加！
+	inputElementDescs[3].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
 
 	// WEIGHT
 	inputElementDescs[4].SemanticName = "WEIGHT";
@@ -307,6 +310,88 @@ void ObjectCommon::CreateAnimationRootSignature() {
 	inputElementDescs[5].Format = DXGI_FORMAT_R32G32B32A32_SINT;
 	inputElementDescs[5].InputSlot = 1;
 	inputElementDescs[5].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+}
+
+void ObjectCommon::CreateComputeRootSignature() {
+	HRESULT hr = S_FALSE;
+
+	// 0番: t0 (SRV / palette)
+	D3D12_DESCRIPTOR_RANGE range0[1] = {};
+	range0[0].BaseShaderRegister = 0; // t0
+	range0[0].NumDescriptors = 1;
+	range0[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	range0[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	// 1番: t1 (SRV / inputVertex)
+	D3D12_DESCRIPTOR_RANGE range1[1] = {};
+	range1[0].BaseShaderRegister = 1; // t1
+	range1[0].NumDescriptors = 1;
+	range1[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	range1[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	// 2番: t2 (SRV / influence)
+	D3D12_DESCRIPTOR_RANGE range2[1] = {};
+	range2[0].BaseShaderRegister = 2; // t2
+	range2[0].NumDescriptors = 1;
+	range2[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	range2[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	// 3番: u0 (UAV / outputVertex)
+	D3D12_DESCRIPTOR_RANGE range3[1] = {};
+	range3[0].BaseShaderRegister = 0; // u0
+	range3[0].NumDescriptors = 1;
+	range3[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+	range3[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	D3D12_ROOT_PARAMETER rootParameters[5] = {};
+
+	// 0番 (palette)
+	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParameters[0].DescriptorTable.pDescriptorRanges = range0;
+	rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
+	rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+	// 1番 (input)
+	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParameters[1].DescriptorTable.pDescriptorRanges = range1;
+	rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
+	rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+	// 2番 (influence)
+	rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParameters[2].DescriptorTable.pDescriptorRanges = range2;
+	rootParameters[2].DescriptorTable.NumDescriptorRanges = 1;
+	rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+	// 3番 (output / UAV)
+	rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParameters[3].DescriptorTable.pDescriptorRanges = range3;
+	rootParameters[3].DescriptorTable.NumDescriptorRanges = 1;
+	rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+	// 4番 (SkinningInfo / CBV)
+	rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootParameters[4].Descriptor.ShaderRegister = 0; // b0
+	rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+	D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature{};
+	// コンピュート用なので入力アセンブラ（頂点レイアウト）の許可フラグは不要
+	descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+	descriptionRootSignature.pParameters = rootParameters;
+	descriptionRootSignature.NumParameters = _countof(rootParameters);
+
+	Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob;
+	Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+	hr = D3D12SerializeRootSignature(&descriptionRootSignature,
+		D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
+	if (FAILED(hr)) {
+		assert(false);
+	}
+
+	hr = dxCommon_->GetDevice()->CreateRootSignature(0,
+		signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(),
+		IID_PPV_ARGS(&computeRootSignature));
+	assert(SUCCEEDED(hr));
 }
 
 // グラフィックスパイプラインの生成
@@ -473,4 +558,18 @@ void ObjectCommon::CreateGraphicsOutlinePipeline() {
 	HRESULT hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&graphicsPipelineStateDesc,
 		IID_PPV_ARGS(&outlinePipelineState));
 	assert(SUCCEEDED(hr));
+}
+
+void ObjectCommon::CreateComputePipeline() {
+	// Shaderをコンパイルする
+	computeShaderBlob = dxCommon_->CompileShader(L"Resource/shaders/Skinning.CS.hlsl", L"cs_6_0");
+	assert(computeShaderBlob != nullptr);
+
+	D3D12_COMPUTE_PIPELINE_STATE_DESC computePipelineStateDesc{};
+	computePipelineStateDesc.CS = {
+		.pShaderBytecode = computeShaderBlob->GetBufferPointer(),
+		.BytecodeLength = computeShaderBlob->GetBufferSize()
+	};
+	computePipelineStateDesc.pRootSignature = computeRootSignature.Get();
+	HRESULT hr = dxCommon_->GetDevice()->CreateComputePipelineState(&computePipelineStateDesc, IID_PPV_ARGS(&computePipelineState));
 }

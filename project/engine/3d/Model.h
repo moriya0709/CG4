@@ -66,6 +66,9 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource;
 	Microsoft::WRL::ComPtr<ID3D12Resource> materialResource;
 	Microsoft::WRL::ComPtr<ID3D12Resource> indexResource;
+	Microsoft::WRL::ComPtr<ID3D12Resource> inputVertexResource;		// 入力用（変形前：SRV）
+	Microsoft::WRL::ComPtr<ID3D12Resource> outputVertexResource;	// 出力用（変形後：UAV 兼 描画用VBV）
+	Microsoft::WRL::ComPtr<ID3D12Resource> skinningInfoResource;	// スキニング情報（CBV）
 
 	// バッファリソース内のデータを指すポインタ
 	VertexData* vertexData = nullptr;
@@ -74,6 +77,18 @@ private:
 	// バッファリソースの使い道を補足するバッファビュー
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
 	D3D12_INDEX_BUFFER_VIEW indexBufferView;
+
+	// 各種ビュー用のSRVマネージャーのインデックス（別々に確保する！）
+	uint32_t paletteSrvIndex_ = 0; // 0番: palette用
+	uint32_t inputVertexSrvIndex_ = 0; // 1番: inputVertex用
+	uint32_t influenceSrvIndex_ = 0; // 2番: influence用
+	uint32_t outputVertexUavIndex_ = 0; // 3番: outputVertex用
+
+	// スキニング定数バッファの構造体（4番: CBV用）
+	struct SkinningInfo {
+		uint32_t vertexCount;
+	};
+	SkinningInfo* skinningInfoData = nullptr;
 
 	// 環境マップ用テクスチャのファイルパス
 	std::string enviromentTexture;
@@ -99,5 +114,11 @@ private:
 
 	// スケルトン
 	Skeleton skeleton;
+
+	// UAV生成
+	void CreateUav();
+	// スキニングの実行関数
+	void DispatchSkinning();
+
 };
 
