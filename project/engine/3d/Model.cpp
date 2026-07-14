@@ -454,16 +454,6 @@ SkinCluster Model::CreateSkinCluster(const Microsoft::WRL::ComPtr<ID3D12Device>&
 	dxCommon_->GetDevice()->CreateShaderResourceView(inputVertexResource.Get(), &inputSrvDesc,
 		dxCommon_->GetCPUDescriptorHandle(descriptorHeap, descriptorSize, inputVertexSrvIndex_));
 
-	// influence用のSRVを生成
-	D3D12_SHADER_RESOURCE_VIEW_DESC influenceSrvDesc{};
-	influenceSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
-	influenceSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	influenceSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-	influenceSrvDesc.Buffer.NumElements = UINT(modelData.vertices.size());
-	influenceSrvDesc.Buffer.StructureByteStride = sizeof(VertexInfluence);
-	dxCommon_->GetDevice()->CreateShaderResourceView(skinCluster.influeceResouce.Get(), &influenceSrvDesc,
-		dxCommon_->GetCPUDescriptorHandle(descriptorHeap, descriptorSize, influenceSrvIndex_));
-
 	// influence用のResourceを確保
 	skinCluster.influeceResouce = dxCommon_->CreateBufferResource(sizeof(VertexInfluence) * modelData.vertices.size());
 	VertexInfluence* mappedInfluence = nullptr;
@@ -475,6 +465,16 @@ SkinCluster Model::CreateSkinCluster(const Microsoft::WRL::ComPtr<ID3D12Device>&
 	skinCluster.influenceBufferView.BufferLocation = skinCluster.influeceResouce->GetGPUVirtualAddress();
 	skinCluster.influenceBufferView.SizeInBytes = UINT(sizeof(VertexInfluence) * modelData.vertices.size());
 	skinCluster.influenceBufferView.StrideInBytes = sizeof(VertexInfluence);
+
+	// influence用のSRVを生成
+	D3D12_SHADER_RESOURCE_VIEW_DESC influenceSrvDesc{};
+	influenceSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	influenceSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	influenceSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	influenceSrvDesc.Buffer.NumElements = UINT(modelData.vertices.size());
+	influenceSrvDesc.Buffer.StructureByteStride = sizeof(VertexInfluence);
+	dxCommon_->GetDevice()->CreateShaderResourceView(skinCluster.influeceResouce.Get(), &influenceSrvDesc,
+		dxCommon_->GetCPUDescriptorHandle(descriptorHeap, descriptorSize, influenceSrvIndex_));
 
 	// InverseBindPoseMatrixの保存領域を作成
 	skinCluster.inverseBindPoseMatrices.resize(skeleton.joints.size());
@@ -584,8 +584,7 @@ void Model::DispatchSkinning() {
 	commandList->SetComputeRootConstantBufferView(4, skinningInfoResource->GetGPUVirtualAddress());
 
 	// 計算実行
-	uint32_t numGroup = (static_cast<uint32_t>(modelData.vertices.size()) + 1023) / 1024;
-	commandList->Dispatch(numGroup, 1, 1);
+	commandList->Dispatch(UINT(modelData.vertices.size() + 1023) / 1024, 1, 1);
 
 	// 計算終了のバリア
 	D3D12_RESOURCE_BARRIER barrier{};

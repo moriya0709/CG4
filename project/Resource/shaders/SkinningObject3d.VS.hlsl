@@ -63,20 +63,24 @@ Skinned Skinning(VertexShaderInput input)
 VertexShaderOutput main(VertexShaderInput input)
 {
     VertexShaderOutput output;
-    Skinned skinned = Skinning(input);
+    
+    float32_t4 localPosition = input.position;
+    float32_t3 localNormal = input.normal;
     
     // ワールド座標を計算
-    float4 worldPos = mul(skinned.position, gTransformationMatrix.World);
+    float4 worldPos = mul(localPosition, gTransformationMatrix.World);
+    
     // 画面座標
-    output.position = mul(skinned.position, gTransformationMatrix.WVP);
+    output.position = mul(localPosition, gTransformationMatrix.WVP);
     output.worldPosition = worldPos.xyz;
     output.texcoord = input.texcoord;
+    
     // 法線もワールド空間へ
-    output.normal = normalize(mul(skinned.normal, (float32_t3x3) gTransformationMatrix.World));
+    output.normal = normalize(mul(localNormal, (float32_t3x3) gTransformationMatrix.World));
 
     // モーションブラー
-    output.currentClipPos = output.position; // 現在の位置（output.positionと同じ）
-    output.prevClipPos = mul(input.position, gTransformationMatrix.prevWVP); // 1フレーム前の位置
+    output.currentClipPos = output.position;
+    output.prevClipPos = mul(localPosition, gTransformationMatrix.prevWVP);
     
     return output;
 }
