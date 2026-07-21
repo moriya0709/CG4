@@ -5,6 +5,7 @@
 #include "CameraManager.h"
 #include "DirectXCommon.h"
 #include "ObjectCommon.h"
+#include "Line.h"
 
 void Object::Initialize(Camera* camera) {
 	// 引数で受け取ってメンバ変数に記録する
@@ -117,6 +118,10 @@ void Object::Update() {
 	if(isSunLight)
 	SunLight();
 
+}
+
+void Object::BoneLineUpdate(Line* line) {
+	model_->BoneLineUpdate(line);
 }
 
 void Object::Draw() {

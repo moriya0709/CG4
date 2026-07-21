@@ -6,6 +6,7 @@
 #include "LineCommon.h"
 #include "CameraManager.h"
 #include "Camera.h"
+#include "Line.h"
 #include "SrvManager.h"
 #include "ObjectCommon.h"
 #include <assimp/vector3.h>
@@ -190,6 +191,37 @@ void Model::Draw() {
 	// 描画
 	dxCommon_->GetCommandList()->DrawIndexedInstanced(static_cast<UINT>(modelData.indices.size()), 1, 0, 0, 0);
 
+}
+
+void Model::BoneLineUpdate(Line* line) {
+	if (!line) return;
+
+	// 全てのJoint（ボーン）をループ処理
+	for (const Joint& joint : skeleton.joints) {
+		// 親ジョイントが存在する場合のみ線を引く
+		if (joint.parent) {
+			// 親ジョイントのインデックス
+			int32_t parentIndex = *joint.parent;
+
+			// ※Matrix4x4の構造体定義に合わせて成分（m[3][0]など）は適宜調整してください
+			// 自身の座標（スケルトン空間）
+			Vector3 currentPos = {
+				joint.skeletonSpaceMatrix.m[3][0],
+				joint.skeletonSpaceMatrix.m[3][1],
+				joint.skeletonSpaceMatrix.m[3][2]
+			};
+
+			// 親の座標（スケルトン空間）
+			Vector3 parentPos = {
+				skeleton.joints[parentIndex].skeletonSpaceMatrix.m[3][0],
+				skeleton.joints[parentIndex].skeletonSpaceMatrix.m[3][1],
+				skeleton.joints[parentIndex].skeletonSpaceMatrix.m[3][2]
+			};
+
+			// Lineクラスに線を追加
+			line->AddLine(parentPos, currentPos);
+		}
+	}
 }
 
 // .mtlファイルの読み込み

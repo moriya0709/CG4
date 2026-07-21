@@ -21,6 +21,7 @@ class ModelCommon;
 class DirectXCommon;
 class SrvManager;
 class AnimationManager;
+class Line;
 
 class Model {
 public:
@@ -30,6 +31,9 @@ public:
 	void Update();
 	// 描画
 	void Draw();
+
+	// 骨の線更新
+	void BoneLineUpdate(Line* line);
 
 	// .mtlファイルの読み込み
 	MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& filename);
