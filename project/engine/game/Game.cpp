@@ -70,6 +70,10 @@ void Game::Initialize() {
 	ModelManager::GetInstance()->LoadModel("Resource/AnimatedCube", "AnimatedCube.gltf");
 	ModelManager::GetInstance()->LoadModel("Resource/human", "walk.gltf");
 
+	// 追加のアニメーションを読み込む
+	ModelManager::GetInstance()->LoadAnimation("walk.gltf","walk", "Resource/human", "walk.gltf");
+	ModelManager::GetInstance()->LoadAnimation("walk.gltf","sneakWalk", "Resource/human", "sneakWalk.gltf");
+
 	// サウンド
 	SoundManager::GetInstance()->Initialize();
 	SoundManager::GetInstance()->Load("bgm", "game.mp3");
