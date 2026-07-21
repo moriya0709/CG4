@@ -57,9 +57,9 @@ void TitleScene::Initialize() {
 	tornado[7]->LoadParticle("Resource/particle/tornado_8.csv");
 
 	particleMesh = std::make_unique<ParticleEmitter>();
-	particleMesh->Initialize("sphere", transformParticle, 5, 0.1f);
-	particleMesh->SetActive("sphere");
-	particleMesh->LoadParticle("Resource/particle/tornado.csv");
+	particleMesh->Initialize("obj", transformParticle, 5, 0.1f);
+	particleMesh->SetActive("obj");
+	particleMesh->LoadParticle("Resource/particle/fire.csv");
 
 	// トレイルエフェクト
 	trailEffect->Initialize("Resource/trail/trail.png", transformParticle, 1.0f, 1.5f);
@@ -96,8 +96,8 @@ void TitleScene::Update() {
 	//		tornado[i]->Update();
 	//	}
 	//}
-	//particleMesh->Update();
-	//particleMesh->Editor();
+	particleMesh->Update();
+	particleMesh->Editor();
 
 	// マウスのワールド座標変換
 	//transformParticle.translate = input->GetMouseWorld(camera.get());

@@ -64,6 +64,24 @@ void SrvManager::CreateSRVforStructuredBuffer(uint32_t srvIndex, ID3D12Resource*
 
 }
 
+void SrvManager::CreateUAVforStructuredBuffer(uint32_t index, ID3D12Resource* pResource, UINT numElements, UINT structureByteStride) {
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
+	uavDesc.Format = DXGI_FORMAT_UNKNOWN;
+	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+	uavDesc.Buffer.NumElements = numElements;
+	uavDesc.Buffer.StructureByteStride = structureByteStride;
+
+	// SrvManager内部の関数を使って確実に正しいCPUハンドルを取得
+	// ※ここの dxCommon_->GetDevice() や GetCPUDescriptorHandle(index) は、
+	// SrvManagerの CreateSRVforStructuredBuffer と全く同じ書き方にしてください。
+	dxCommon_->GetDevice()->CreateUnorderedAccessView(
+		pResource,
+		nullptr,
+		&uavDesc,
+		GetCPUDescriptorHandle(index)
+	);
+}
+
 void SrvManager::PreDraw() {
 	// 描画用のDescriptorHeapの設定
 	ID3D12DescriptorHeap* descriptorHeaps[] = { descriptorHeap.Get() };
