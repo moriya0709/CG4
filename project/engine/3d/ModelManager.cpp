@@ -50,3 +50,13 @@ Model* ModelManager::FindModel(const std::string& filePath) {
 	// ファイル名一致なし
 	return nullptr;
 }
+
+void ModelManager::LoadAnimation(const std::string& modelFilePath, const std::string& animationName, const std::string& directoryPath, const std::string& animFilePath) {
+	// 読み込み済みのモデルを検索
+	Model* model = FindModel(modelFilePath);
+
+	if (model) {
+		// モデルが見つかったら、そのモデルに対してアニメーションを読み込む
+		model->LoadAnimation(animationName, directoryPath, animFilePath);
+	}
+}

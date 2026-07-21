@@ -21,6 +21,9 @@ public:
 	// モデルの検索
 	Model* FindModel(const std::string& filePath);
 	
+	// 追加のアニメーションを読み込み
+	void LoadAnimation(const std::string& modelFilePath, const std::string& animationName, const std::string& directoryPath, const std::string& animFilePath);
+
 	ModelManager() = default;
 	~ModelManager() = default;
 	ModelManager(ModelManager&) = delete;

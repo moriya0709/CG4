@@ -24,8 +24,6 @@ void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, SrvMan
 
 	// モデル読み込み
 	modelData = LoadModelFile(directoryPath, filename);
-	// アニメーション読み込み
-	animation = animationManager_->LoadAnimationFile(directoryPath, filename);
 	// スケルトン生成
 	skeleton = CreateSkeleton(modelData.rootNode);
 
@@ -131,16 +129,39 @@ void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, SrvMan
 }
 
 void Model::Update() {
-	// アニメーションが無い、または再生時間が0の時は何もしない
-	if (animation.duration > 0.0f && !animation.nodeAnimations.empty()) {
-		// アニメーション更新
-		animationManager_->animationTime = (std::max)(0.0f, animationManager_->animationTime + 1.0f / 60.0f);
-		if(animationManager_->animationTime >= animation.duration) {
-			animationManager_->animationTime = 0.0f;
-		}
+	float deltaTime = 1.0f / 60.0f; // 毎フレームの加算時間（環境に合わせて可変フレームレートにしてもOK）
 
-		ApplyAnimation(skeleton, animation, animationManager_->animationTime);
-	}
+    // アニメーションの進行とブレンド状態の更新
+    if (currentAnimation_) {
+        // 現在のアニメーション時間を進める
+        currentAnimationTime_ = std::fmod(currentAnimationTime_ + deltaTime, currentAnimation_->duration);
+
+        if (isBlending_ && nextAnimation_) {
+            // 遷移先のアニメーション時間も進める
+            nextAnimationTime_ = std::fmod(nextAnimationTime_ + deltaTime, nextAnimation_->duration);
+            
+            // ブレンド率を進行させる
+            blendFactor_ += deltaTime / blendDuration_;
+
+            if (blendFactor_ >= 1.0f) {
+                // ブレンドが完了したら、next を current に切り替える
+                currentAnimation_ = nextAnimation_;
+                currentAnimationTime_ = nextAnimationTime_;
+                nextAnimation_ = nullptr;
+                isBlending_ = false;
+                blendFactor_ = 0.0f;
+            }
+        }
+    }
+
+    // 姿勢の適用
+    if (isBlending_ && nextAnimation_) {
+        // ブレンド中
+        ApplyAnimationBlend(skeleton, currentAnimation_, currentAnimationTime_, nextAnimation_, nextAnimationTime_, blendFactor_);
+    } else if (currentAnimation_) {
+        // 単一再生中（既存の関数を利用）
+        ApplyAnimation(skeleton, *currentAnimation_, currentAnimationTime_);
+    }
 
 	// 全てのJointを更新。親が若いので通常ループで処理可能になっている
 	for (Joint& joint : skeleton.joints) {
@@ -193,8 +214,11 @@ void Model::Draw() {
 
 }
 
-void Model::BoneLineUpdate(Line* line) {
+void Model::BoneLineUpdate(Line* line, const Vector3& scale, const Vector3& rotate, const Vector3& translate) {
 	if (!line) return;
+
+	// ワールド行列を構築する
+	Matrix4x4 worldMatrix = MakeAffineMatrix(scale, rotate, translate);
 
 	// 全てのJoint（ボーン）をループ処理
 	for (const Joint& joint : skeleton.joints) {
@@ -203,20 +227,23 @@ void Model::BoneLineUpdate(Line* line) {
 			// 親ジョイントのインデックス
 			int32_t parentIndex = *joint.parent;
 
-			// ※Matrix4x4の構造体定義に合わせて成分（m[3][0]など）は適宜調整してください
-			// 自身の座標（スケルトン空間）
+			// 自身の座標（ローカル/スケルトン空間）
 			Vector3 currentPos = {
 				joint.skeletonSpaceMatrix.m[3][0],
 				joint.skeletonSpaceMatrix.m[3][1],
 				joint.skeletonSpaceMatrix.m[3][2]
 			};
 
-			// 親の座標（スケルトン空間）
+			// 親の座標（ローカル/スケルトン空間）
 			Vector3 parentPos = {
 				skeleton.joints[parentIndex].skeletonSpaceMatrix.m[3][0],
 				skeleton.joints[parentIndex].skeletonSpaceMatrix.m[3][1],
 				skeleton.joints[parentIndex].skeletonSpaceMatrix.m[3][2]
 			};
+
+			// ローカル座標をワールド座標に変換する
+			currentPos = VectorTransform(currentPos, worldMatrix);
+			parentPos = VectorTransform(parentPos, worldMatrix);
 
 			// Lineクラスに線を追加
 			line->AddLine(parentPos, currentPos);
@@ -567,6 +594,85 @@ void Model::ApplyAnimation(Skeleton& skeleton, const Animation& animation, float
 			joint.transform.rotate = animationManager_->CalculateValue(rootNodeAnimation.rotate.keyframes, animationTime);
 			joint.transform.scale = animationManager_->CalculateValue(rootNodeAnimation.scale.keyframes, animationTime);
 		}
+	}
+}
+
+void Model::LoadAnimation(const std::string& animationName, const std::string& directoryPath, const std::string& filename) {
+	// AnimationManagerを使って読み込み、マップに登録する
+	animations_[animationName] = animationManager_->LoadAnimationFile(directoryPath, filename);
+}
+
+void Model::PlayAnimation(const std::string& animationName, float blendTime) {
+	// マップから指定された名前のアニメーションを検索
+	auto it = animations_.find(animationName);
+	if (it == animations_.end()) {
+		return; // 見つからなかった場合は何もしない
+	}
+
+	const Animation* nextAnim = &it->second;
+
+	// 現在再生中のアニメーションがない場合
+	if (currentAnimation_ == nullptr) {
+		currentAnimation_ = nextAnim;
+		currentAnimationTime_ = 0.0f;
+		isBlending_ = false;
+	}
+	// 違うアニメーションが指定されたらブレンド開始
+	else if (currentAnimation_ != nextAnim) {
+		nextAnimation_ = nextAnim;
+		nextAnimationTime_ = 0.0f;
+		blendFactor_ = 0.0f;
+		blendDuration_ = blendTime;
+		isBlending_ = true;
+	}
+}
+
+void Model::ApplyAnimationBlend(Skeleton& skeleton, const Animation* currentAnim, float currentTime, const Animation* nextAnim, float nextTime, float blendWeight) {
+	for (Joint& joint : skeleton.joints) {
+		// --- ① 現在のアニメーションの姿勢を計算 ---
+		Vector3 currentTranslate = joint.transform.translate;
+		Quaternion currentRotate = joint.transform.rotate;
+		Vector3 currentScale = joint.transform.scale;
+
+		if (auto it = currentAnim->nodeAnimations.find(joint.name); it != currentAnim->nodeAnimations.end()) {
+			const NodeAnimation& rootNodeAnimation = it->second;
+			currentTranslate = animationManager_->CalculateValue(rootNodeAnimation.translate.keyframes, currentTime);
+			currentRotate = animationManager_->CalculateValue(rootNodeAnimation.rotate.keyframes, currentTime);
+			currentScale = animationManager_->CalculateValue(rootNodeAnimation.scale.keyframes, currentTime);
+		}
+
+		// --- ② 次のアニメーションの姿勢を計算 ---
+		Vector3 nextTranslate = joint.transform.translate;
+		Quaternion nextRotate = joint.transform.rotate;
+		Vector3 nextScale = joint.transform.scale;
+
+		if (auto it = nextAnim->nodeAnimations.find(joint.name); it != nextAnim->nodeAnimations.end()) {
+			const NodeAnimation& rootNodeAnimation = it->second;
+			nextTranslate = animationManager_->CalculateValue(rootNodeAnimation.translate.keyframes, nextTime);
+			nextRotate = animationManager_->CalculateValue(rootNodeAnimation.rotate.keyframes, nextTime);
+			nextScale = animationManager_->CalculateValue(rootNodeAnimation.scale.keyframes, nextTime);
+		}
+
+		// 🔴 修正：回転の補間（最短経路のための内積チェックを追加）
+		float dot = currentRotate.x * nextRotate.x +
+			currentRotate.y * nextRotate.y +
+			currentRotate.z * nextRotate.z +
+			currentRotate.w * nextRotate.w;
+
+		Quaternion targetRotate = nextRotate;
+		if (dot < 0.0f) {
+			// 内積が負の場合は、逆経路（遠回りや潰れ）を防ぐために符号を反転させる
+			targetRotate = { -nextRotate.x, -nextRotate.y, -nextRotate.z, -nextRotate.w };
+		}
+
+
+		// --- ③ 2つの姿勢を blendWeight (0.0～1.0) で補間してジョイントに適用 ---
+		joint.transform.translate = Lerp(currentTranslate, nextTranslate, blendWeight);
+
+		// 符号を安全な状態に整えてからSlerpで補間する
+		joint.transform.rotate = Slerp(currentRotate, targetRotate, blendWeight);
+
+		joint.transform.scale = Lerp(currentScale, nextScale, blendWeight);
 	}
 }
 

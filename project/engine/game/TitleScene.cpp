@@ -25,6 +25,7 @@ void TitleScene::Initialize() {
 
 	// 初期化済みの3Dオブジェクトにモデルを紐づける
 	object->SetModel("walk.gltf");
+	object->PlayAnimation("walk", 0.0f);
 
 	// パーティクル
 
@@ -86,10 +87,18 @@ void TitleScene::Update() {
 
 	// * 3Dオブジェクト* //
 	object->Update();
-	object->BoneLineUpdate(line.get());
+	object->BoneLineUpdate(line.get(), object->GetScale(), object->GetRotate(), object->GetTranslate());
 
 	//　線
 	line->Update();
+
+	// アニメーション変更
+	if (input->TriggerKey(DIK_0)) {
+		object->PlayAnimation("walk", 1.0f);
+	}
+	if (input->TriggerKey(DIK_1)) {
+		object->PlayAnimation("sneakWalk", 1.0f);
+	}
 
 	// *パーティクル* //
 	//if (isTornado) {

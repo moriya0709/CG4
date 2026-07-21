@@ -33,7 +33,7 @@ public:
 	void Draw();
 
 	// 骨の線更新
-	void BoneLineUpdate(Line* line);
+	void BoneLineUpdate(Line* line, const Vector3& scale, const Vector3& rotate, const Vector3& translate);
 
 	// .mtlファイルの読み込み
 	MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& filename);
@@ -54,6 +54,13 @@ public:
 
 	// アニメーションを適用する
 	void ApplyAnimation(Skeleton& skeleton, const Animation& animation, float animationTime);
+
+	// アニメーションを名前付きで読み込む
+	void LoadAnimation(const std::string& animationName, const std::string& directoryPath, const std::string& filename);
+	// アニメーションを再生する
+	void PlayAnimation(const std::string& animationName, float blendTime = 0.2f);
+	// 2つのアニメーションをブレンドして適用する
+	void ApplyAnimationBlend(Skeleton& skeleton, const Animation* currentAnim, float currentTime, const Animation* nextAnim, float nextTime, float blendWeight);
 
 	// getter
 	ModelData GetModelData() const { return modelData; }
@@ -94,12 +101,24 @@ private:
 	};
 	SkinningInfo* skinningInfoData = nullptr;
 
+	// アニメーションブレンド用の状態管理
+	const Animation* currentAnimation_ = nullptr; // 再生中のアニメーション
+	const Animation* nextAnimation_ = nullptr;    // 遷移先のアニメーション
+	float currentAnimationTime_ = 0.0f;           // 再生中アニメーションの経過時間
+	float nextAnimationTime_ = 0.0f;              // 遷移先アニメーションの経過時間
+
+	float blendFactor_ = 0.0f;                    // ブレンド率（0.0f ～ 1.0f）
+	float blendDuration_ = 0.2f;                  // クロスフェードにかける時間（秒）
+	bool isBlending_ = false;                     // ブレンド中かどうかのフラグ
+
+	// アニメーションのマップ
+	std::map<std::string, Animation> animations_;
+
 	// 環境マップ用テクスチャのファイルパス
 	std::string enviromentTexture;
 
 	// index
 	uint32_t srvIndex_;
-
 	// スキンクラスタ
 	SkinCluster skinCluster;
 

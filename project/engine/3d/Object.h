@@ -71,9 +71,12 @@ public:
 	void Initialize(Camera* camera);
 	// 更新
 	void Update();
-	void BoneLineUpdate(Line* line);
+	void BoneLineUpdate(Line* line, const Vector3& scale, const Vector3& rotate, const Vector3& translate);
 	// 描画
 	void Draw();
+
+	// アニメーション再生
+	void PlayAnimation(const std::string& animationName, float blendTime = 0.2f);
 
 	// setter
 	void SetModel(Model* model) { model_ = model; }

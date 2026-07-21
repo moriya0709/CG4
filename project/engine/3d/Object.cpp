@@ -120,8 +120,8 @@ void Object::Update() {
 
 }
 
-void Object::BoneLineUpdate(Line* line) {
-	model_->BoneLineUpdate(line);
+void Object::BoneLineUpdate(Line* line, const Vector3& scale, const Vector3& rotate, const Vector3& translate) {
+	model_->BoneLineUpdate(line, scale, rotate, translate);
 }
 
 void Object::Draw() {
@@ -162,6 +162,10 @@ void Object::Draw() {
 		model_->Draw();
 	}
 
+}
+
+void Object::PlayAnimation(const std::string& animationName, float blendTime) {
+	model_->PlayAnimation(animationName, blendTime);
 }
 
 void Object::SetModel(const std::string& filePath) {
