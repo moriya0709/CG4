@@ -49,145 +49,205 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager
 	size_t bufferSize = (sizeof(Material) + 255) & ~255;
 	materialResource = dxCommon_->CreateBufferResource(bufferSize);
 
+	// *カメラ* //
+	uint32_t cameraBufferSize = (sizeof(ParticleCameraData) + 255) & ~255; // 256バイトアライメント
+	cameraDataResource_ = dxCommon_->CreateBufferResource(cameraBufferSize);
+
+	HRESULT hr = cameraDataResource_->Map(0, nullptr, reinterpret_cast<void**>(&cameraDataMap_));
+	assert(SUCCEEDED(hr));
+
+	// 初期化 (とりあえず単位行列を入れておく)
+	cameraDataMap_->viewProj = MakeIdentity4x4();
+	cameraDataMap_->billboardMatrix = MakeIdentity4x4();
+
+	// *CS用* //
+
+	bufferSize = (sizeof(ParticleCommonData) + 255) & ~255;
+	commonDataResource_ = dxCommon_->CreateBufferResource(bufferSize);
+
+	// 常にマッピングしておく
+	hr = commonDataResource_->Map(0, nullptr, reinterpret_cast<void**>(&commonDataMap_));
+	assert(SUCCEEDED(hr));
+
+	// 初期値を設定
+	commonDataMap_->gDeltaTime = 1.0f / 60.0f; // 例: 60FPS固定の場合。可変フレームレートならUpdateで毎フレーム更新
+	commonDataMap_->gMaxParticles = kMaxParticleInstance; // 最大パーティクル数
+	commonDataMap_->gUseField = 0; // フィールド(重力など)を最初はOFFにする
+
 	// フィールドの設定
 	accelerationField.acceleration = { 15.0f,0.0f,0.0f };
 	accelerationField.area.min = { -1.0f,-1.0f,-1.0f };
 	accelerationField.area.max = { 1.0f,1.0f,1.0f };
 
 	// ルートシグネイチャの作成
-	CreateRootSignature();
+	CreateRootSignature();			// 通常
+	CreateComputeRootSignature();	// コンピュート
 	// グラフィックスパイプラインの生成
 	CreateGraphicsPipeline();
+	// コンピュートパイプラインの生成
+	CreateComputePipeline();
 }
 
 void ParticleManager::Update() {
-	// 毎フレーム、今アクティブなカメラを取得する
 	Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera();
-
-	// 万が一カメラが無い場合は安全のために抜ける
 	if (!activeCamera) return;
 
-	Matrix4x4 backToFrontMatrix = MakeRotateYMatrix(std::numbers::pi_v<float>);
+	auto commandList = dxCommon_->GetCommandList();
 
-	// 取得した activeCamera からビュー行列をもらう
-	Matrix4x4 view = activeCamera->GetViewMatrix();
-	view.m[3][0] = 0.0f; view.m[3][1] = 0.0f; view.m[3][2] = 0.0f;
-	Matrix4x4 billboardMatrix = Inverse(view);
+	// CS用のパイプラインとルートシグネチャをセット
+	commandList->SetComputeRootSignature(computeRootSignature.Get());
+	commandList->SetPipelineState(computePipelineState.Get());
+	commandList->SetComputeRootConstantBufferView(0, commonDataResource_->GetGPUVirtualAddress());
 
 	for (auto& groupPair : particleGroups) {
 		ParticleGroup& group = groupPair.second;
 
-		if (group.particles.empty()) continue;
+		// 念のためCPU管理配列のサイズチェック
+		if (group.cpuControls.size() < kMaxParticleInstance) {
+			group.cpuControls.resize(kMaxParticleInstance);
+		}
 
-		ParticleForGPU* mapped = nullptr;
-		group.instancingResource->Map(0, nullptr, (void**)&mapped);
-
-		uint32_t index = 0;
-		for (auto it = group.particles.begin(); it != group.particles.end(); ) {
-			if (it->currentTime >= it->lifeTime) {
-				it = group.particles.erase(it);
-				continue;
+		// =========================================================
+		// 1. CPU側で「どのスロットが空いたか」を把握するためだけにタイマーを進める
+		// （※ここではまだGPUのバッファは触りません）
+		// =========================================================
+		for (uint32_t i = 0; i < kMaxParticleInstance; ++i) {
+			if (group.cpuControls[i].isActive) {
+				group.cpuControls[i].currentTime += kDeltaTime;
+				if (group.cpuControls[i].currentTime >= group.cpuControls[i].lifeTime) {
+					group.cpuControls[i].isActive = false; // CPU側で空き部屋にする
+				}
 			}
+		}
 
-			if (index >= kMaxParticleInstance) {
-				break;
-			}
+		// =========================================================
+		// 2. リソースバリア: DEFAULTバッファを コピー先(COPY_DEST) に遷移
+		// =========================================================
+		D3D12_RESOURCE_BARRIER barrier{};
+		barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		barrier.Transition.pResource = group.instancingResource.Get();
+		barrier.Transition.StateBefore = group.isFirstUpdate ? D3D12_RESOURCE_STATE_COMMON : D3D12_RESOURCE_STATE_GENERIC_READ;
+		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+		commandList->ResourceBarrier(1, &barrier);
 
-			if (useField) {
-				if (IsCollision(accelerationField.area, it->transform.translate)) {
-					it->velocity += accelerationField.acceleration * kDeltaTime;
+		// =========================================================
+		// 3. 新しく生まれたパーティクルのみ、空き部屋へ「ピンポイント」で転送する
+		// =========================================================
+		for (const auto& particle : group.particles) {
+			// CPUの管理データから空いているインデックスを探す
+			int freeIndex = -1;
+			for (uint32_t i = 0; i < kMaxParticleInstance; ++i) {
+				if (!group.cpuControls[i].isActive) {
+					freeIndex = i;
+					break;
 				}
 			}
 
-			it->transform.translate += it->velocity * kDeltaTime;
+			if (freeIndex == -1) break; // 満杯なら生成スキップ
 
-			// 色を徐々に変化させる
-			float progress = (it->currentTime / it->lifeTime) * it->colorChangeSpeed; // ← it-> に変更
-			if (progress > 1.0f) {
-				progress = 1.0f;
-			}
-			if (it->isColorChange[0]) { // ← it-> に変更
-				it->color.x = it->startColor.x + (it->finalColor.x - it->startColor.x) * progress; // ← it-> に変更
-			}
-			if (it->isColorChange[1]) {
-				it->color.y = it->startColor.y + (it->finalColor.y - it->startColor.y) * progress;
-			}
-			if (it->isColorChange[2]) {
-				it->color.z = it->startColor.z + (it->finalColor.z - it->startColor.z) * progress;
-			}
-			if (it->isColorChange[3]) {
-				it->color.w = it->startColor.w + (it->finalColor.w - it->startColor.w) * progress;
-			}
+			// CPU側の管理状態を更新
+			group.cpuControls[freeIndex].isActive = true;
+			group.cpuControls[freeIndex].currentTime = 0.0f;
+			group.cpuControls[freeIndex].lifeTime = particle.lifeTime;
 
-			// サイズを徐々に変化させる
-			if (it->isScaleChange[0]) {
-				it->transform.scale.x += it->scaleAdd;
+			// UPLOADバッファの「該当インデックスの部屋」にのみ初期データを書き込む
+			group.instancingData[freeIndex].translate = particle.transform.translate;
+			group.instancingData[freeIndex].scale = particle.transform.scale;
+			group.instancingData[freeIndex].rotate = particle.transform.rotate;
+			group.instancingData[freeIndex].velocity = particle.velocity;
+			group.instancingData[freeIndex].color = particle.color;
+			group.instancingData[freeIndex].startColor = particle.startColor;
+			group.instancingData[freeIndex].finalColor = particle.finalColor;
+			group.instancingData[freeIndex].lifeTime = particle.lifeTime;
+			group.instancingData[freeIndex].currentTime = 0.0f;
+			group.instancingData[freeIndex].colorChangeSpeed = particle.colorChangeSpeed;
+			group.instancingData[freeIndex].scaleAdd = particle.scaleAdd;
+			group.instancingData[freeIndex].emissive = particle.emissive;
+			group.instancingData[freeIndex].uvScale = particle.uvScale;
+			group.instancingData[freeIndex].uvOffset = particle.uvOffset;
+			group.instancingData[freeIndex].uvScrollSpeed = particle.uvScrollSpeed;
 
-				if (it->transform.scale.x <= 0.0f)
-					it->transform.scale.x = 0.0f;
-			}
-			if (it->isScaleChange[1]) {
-				it->transform.scale.y += it->scaleAdd;
+			group.instancingData[freeIndex].isColorChange = {
+				particle.isColorChange[0] ? 1.0f : 0.0f,
+				particle.isColorChange[1] ? 1.0f : 0.0f,
+				particle.isColorChange[2] ? 1.0f : 0.0f,
+				particle.isColorChange[3] ? 1.0f : 0.0f
+			};
+			group.instancingData[freeIndex].isScaleChange = {
+				particle.isScaleChange[0] ? 1.0f : 0.0f,
+				particle.isScaleChange[1] ? 1.0f : 0.0f,
+				particle.isScaleChange[2] ? 1.0f : 0.0f
+			};
 
-				if (it->transform.scale.y <= 0.0f)
-					it->transform.scale.y = 0.0f;
-			}
-			if (it->isScaleChange[2]) {
-				it->transform.scale.z += it->scaleAdd;
+			// 行列は初期化状態（※後述の注意点を参照）
+			group.instancingData[freeIndex].World = MakeIdentity4x4();
+			group.instancingData[freeIndex].WVP = MakeIdentity4x4();
+			group.instancingData[freeIndex].isActive = 1;
 
-				if (it->transform.scale.z <= 0.0f)
-					it->transform.scale.z = 0.0f;
-			}
-
-			// UVスクロール
-			it->uvOffset.x += it->uvScrollSpeed.x * kDeltaTime;
-			it->uvOffset.y += it->uvScrollSpeed.y * kDeltaTime;
-
-			// ディゾルブ
-			//materialData->dissolveThreshold = it->currentTime / it->lifeTime;
-
-			it->currentTime += kDeltaTime;
-
-			Matrix4x4 scale = MakeScaleMatrix(it->transform.scale);
-			Matrix4x4 translate = MakeTranslateMatrix(it->transform.translate);
-			Matrix4x4 rotateX = MakeRotateXMatrix(it->transform.rotate.x);
-			Matrix4x4 rotateY = MakeRotateYMatrix(it->transform.rotate.y);
-			Matrix4x4 rotateZ = MakeRotateZMatrix(it->transform.rotate.z);
-			Matrix4x4 rotate;
-			if (isBillboard)
-				rotate = Multiply(Multiply(rotateX, rotateY), billboardMatrix);
-			else
-				rotate = Multiply(Multiply(rotateX, rotateY), rotateZ);
-
-			
-			Matrix4x4 world = Multiply(Multiply(scale, rotate), translate);
-
-			// 取得した activeCamera からビュープロジェクション行列をもらう
-			Matrix4x4 viewProj = Multiply(activeCamera->GetViewMatrix(), activeCamera->GetProjectionMatrix());
-
-			mapped[index].world = world;
-			mapped[index].WVP = Multiply(world, viewProj);
-			mapped[index].color.x = it->color.x * it->emissive;
-			mapped[index].color.y = it->color.y * it->emissive;
-			mapped[index].color.z = it->color.z * it->emissive;
-			mapped[index].color.w = it->color.w;
-			mapped[index].uvScale = it->uvScale;
-			mapped[index].uvOffset = it->uvOffset;
-
-			++index;
-			++it;
+			// ★【修正のキモ】丸ごとCopyResourceするのをやめ、この1件分だけをDEFAULTバッファへピンポイントコピー！
+			// これにより、現在GPU側で動いている他のパーティクルのデータが破壊されなくなります。
+			UINT64 offset = freeIndex * sizeof(group.instancingData[0]); // 構造体1個分のバイトオフセット
+			commandList->CopyBufferRegion(
+				group.instancingResource.Get(), offset,
+				group.instancingUploadResource.Get(), offset,
+				sizeof(group.instancingData[0])
+			);
 		}
 
-		group.instancingResource->Unmap(0, nullptr);
+		// 生成用の一次リストはクリア
+		group.particles.clear();
+
+		// =========================================================
+		// 4. リソースバリア: コピー先(COPY_DEST) から CS用(UAV) へ遷移
+		// =========================================================
+		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		commandList->ResourceBarrier(1, &barrier);
+
+		group.isFirstUpdate = false;
+
+		// ---------------------------------------------------------
+		// 5. UAVを DescriptorTable にセット & CSのDispatch
+		// ---------------------------------------------------------
+		commandList->SetComputeRootDescriptorTable(1, srvManager_->GetGPUDescriptorHandle(group.uavIndex));
+
+		// 【修正3】最大数に応じた正しいスレッドグループ数を計算してDispatch（1024個単位）
+		uint32_t threadGroupsX = (kMaxParticleInstance + 1023) / 1024;
+		commandList->Dispatch(threadGroupsX, 1, 1);
+
+		// ---------------------------------------------------------
+		// 6. リソースバリア: 書き込み(UAV) -> 描画用読み込み(SRV) へ遷移
+		// ---------------------------------------------------------
+		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_GENERIC_READ;
+		commandList->ResourceBarrier(1, &barrier);
 	}
 }
 
 void ParticleManager::Draw() {
+	Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera();
+	if (activeCamera) {
+		cameraDataMap_->viewProj = activeCamera->GetViewProjectionMatrix();
+
+		// ─── ★ここを修正：カメラのワールド行列から位置成分を消去する ───
+		Matrix4x4 billboard = activeCamera->GetWorldMatrix();
+
+		// 行列の4行目（平行移動成分のX, Y, Z）を 0.0f にクリアして純粋な回転行列にする
+		billboard.m[3][0] = 0.0f;
+		billboard.m[3][1] = 0.0f;
+		billboard.m[3][2] = 0.0f;
+
+		cameraDataMap_->billboardMatrix = billboard;
+	}
+
 	// ルートシグネイチャを設定
 	dxCommon_->GetCommandList()->SetGraphicsRootSignature(rootSignature.Get());
 	// プリミティブポロジーを設定
 	dxCommon_->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+	// ▼ ここを追加！ ルートパラメータ[4]（VSの b0）をセット ▼
+	dxCommon_->GetCommandList()->SetGraphicsRootConstantBufferView(4, cameraDataResource_->GetGPUVirtualAddress());
+	
 	// ---------------------------------------------------------
 	// 1. 【追加】描画対象のグループへのポインタを一時的に配列に集める
 	// ---------------------------------------------------------
@@ -195,9 +255,19 @@ void ParticleManager::Draw() {
 	sortedGroups.reserve(particleGroups.size());
 
 	for (auto& groupPair : particleGroups) {
-		// パーティクルが1つ以上ある場合だけ描画対象にする（元の empty チェックをここに移動）
-		if (!groupPair.second.particles.empty()) {
-			sortedGroups.push_back(&groupPair.second);
+		ParticleGroup& group = groupPair.second;
+
+		// CPU側の管理データを見て、1つでもアクティブな（生存している）パーティクルがあれば描画対象にする
+		bool hasActiveParticle = false;
+		for (uint32_t i = 0; i < kMaxParticleInstance; ++i) {
+			if (group.cpuControls[i].isActive) {
+				hasActiveParticle = true;
+				break;
+			}
+		}
+
+		if (hasActiveParticle) {
+			sortedGroups.push_back(&group);
 		}
 	}
 
@@ -238,156 +308,7 @@ void ParticleManager::Draw() {
 		dxCommon_->GetCommandList()->SetGraphicsRootDescriptorTable(2, srvManager_->GetGPUDescriptorHandle(group.materialData.textureIndex));
 
 		// ★ 修正2: 描画時の1インスタンスあたりの頂点数を、グループのモデルデータから取得する
-		dxCommon_->GetCommandList()->DrawInstanced(static_cast<UINT>(group.modelData.vertices.size()), static_cast<UINT>(group.particles.size()), 0, 0);
-	}
-}
-
-// ルートシグネチャの作成
-void ParticleManager::CreateRootSignature() {
-	// DescriptorRange作成
-	D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
-	descriptorRange[0].BaseShaderRegister = 0; // 0から始まる
-	descriptorRange[0].NumDescriptors = 128; // 数は1つ
-	descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; // SRVを使う
-	descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND; // offsetを自動計算
-
-	// DescriptorRangeForInstancing作成
-	D3D12_DESCRIPTOR_RANGE DescriptorRangeForInstancing[1] = {};
-	DescriptorRangeForInstancing[0].BaseShaderRegister = 0; // 0から始まる
-	DescriptorRangeForInstancing[0].NumDescriptors = 1; // 数は1つ
-	DescriptorRangeForInstancing[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; // SRVを使う
-	DescriptorRangeForInstancing[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND; // offsetを自動計算
-
-	// RootSignature作成
-	D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature{};
-	descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-	// RootParameter作成
-	D3D12_ROOT_PARAMETER rootParameters[4] = {};
-	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う
-	rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // PixelShaderで使う
-	rootParameters[0].Descriptor.ShaderRegister = 0; // レジスタ番号０とバインド
-	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE; // DescriptorTableを使う
-	rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX; // VertexShaderで使う
-	rootParameters[1].DescriptorTable.pDescriptorRanges = DescriptorRangeForInstancing; // Tableの中身の配列を指定
-	rootParameters[1].DescriptorTable.NumDescriptorRanges = _countof(DescriptorRangeForInstancing); // Tableで利用する数
-	rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE; // DescriptorTableを使う
-	rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // PixelShaderで使う
-	rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRange; // Tableの中身の配列を指定
-	rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRange); // Tableで利用する数
-	rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う
-	rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // PixelShaderで使う
-	rootParameters[3].Descriptor.ShaderRegister = 1; // レジスタ番号１を使う
-
-	descriptionRootSignature.pParameters = rootParameters; // ルートパラメーター配列へのポインタ
-	descriptionRootSignature.NumParameters = _countof(rootParameters); // 配列の長さ
-
-	// Samplerの設定
-	D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
-	staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR; // 倍リニアフィルター
-	staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // 0~1の範囲外をリピート
-	staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-	staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER; // 比較しない
-	staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX; // ありったけのMipmapを使う
-	staticSamplers[0].ShaderRegister = 0; // レジスタ番号０を使う
-	staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // PixelShaderで使う
-	descriptionRootSignature.pStaticSamplers = staticSamplers;
-	descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
-
-	// シリアライズ「してバイナリにする
-	ID3DBlob* signatureBlob = nullptr;
-	ID3DBlob* errorBlob = nullptr;
-	HRESULT hr = D3D12SerializeRootSignature(&descriptionRootSignature,
-		D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
-	if (FAILED(hr)) {
-		//Log(reinterpret_cast<char*> (errorBlob->GetBufferPointer()));
-		assert(false);
-	}
-	// バイナリを元に生成
-	hr = dxCommon_->GetDevice()->CreateRootSignature(0,
-		signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(),
-		IID_PPV_ARGS(&rootSignature));
-	assert(SUCCEEDED(hr));
-
-	// InputLayout
-	inputElementDescs[0].SemanticName = "POSITION";
-	inputElementDescs[0].SemanticIndex = 0;
-	inputElementDescs[0].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-	inputElementDescs[0].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
-	inputElementDescs[1].SemanticName = "TEXCOORD";
-	inputElementDescs[1].SemanticIndex = 0;
-	inputElementDescs[1].Format = DXGI_FORMAT_R32G32_FLOAT;
-	inputElementDescs[1].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
-	inputElementDescs[2].SemanticName = "NORMAL";
-	inputElementDescs[2].SemanticIndex = 0;
-	inputElementDescs[2].Format = DXGI_FORMAT_R32G32B32_FLOAT;
-	inputElementDescs[2].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
-
-
-	inputLayoutDesc.pInputElementDescs = inputElementDescs;
-	inputLayoutDesc.NumElements = _countof(inputElementDescs);
-
-	// BlendStateの設定
-	// 全ての色要素を書き込む
-	blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-	blendDesc.RenderTarget[0].BlendEnable = true; // ブレンドを有効にする
-	blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-	blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-
-	// RasiterzerStateの設定
-	// カリングしない（裏面も表示させる）
-	rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
-	// 三角形の中を塗りつぶす
-	rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
-
-	// Shaderをコンパイルする
-	vertexShaderBlob = dxCommon_->CompileShader(L"Resource/shaders/Particle.VS.hlsl", L"vs_6_0");
-	assert(vertexShaderBlob != nullptr);
-
-	pixelShaderBlob = dxCommon_->CompileShader(L"Resource/shaders/Particle.PS.hlsl", L"ps_6_0");
-	assert(pixelShaderBlob != nullptr);
-}
-// グラフィックスパイプラインの生成
-void ParticleManager::CreateGraphicsPipeline() {
-	//PSO
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineStateDesc{};
-	graphicsPipelineStateDesc.pRootSignature = rootSignature.Get(); // RootSignature
-	graphicsPipelineStateDesc.InputLayout = inputLayoutDesc; // InputLayout
-	graphicsPipelineStateDesc.VS = { vertexShaderBlob->GetBufferPointer(),
-	vertexShaderBlob->GetBufferSize() }; // VertexShader
-	graphicsPipelineStateDesc.PS = { pixelShaderBlob->GetBufferPointer(),
-	pixelShaderBlob->GetBufferSize() }; // PixelShader
-	graphicsPipelineStateDesc.BlendState = blendDesc; // BlendState
-	graphicsPipelineStateDesc.RasterizerState = rasterizerDesc; // RasterizerState
-
-	// テクスチャの透明な部分を見えなくする設定
-	D3D12_DEPTH_STENCIL_DESC particleDepthDesc{};
-	particleDepthDesc.DepthEnable = true;
-	particleDepthDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-	particleDepthDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-	particleDepthDesc.StencilEnable = false;
-
-	// DepthStencilの設定
-	graphicsPipelineStateDesc.DepthStencilState = particleDepthDesc;
-	graphicsPipelineStateDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-
-	// 書き込むRTVの情報
-	graphicsPipelineStateDesc.NumRenderTargets = 1;
-	graphicsPipelineStateDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
-	// 利用するトポロジ（形状）のタイプ。三角形
-	graphicsPipelineStateDesc.PrimitiveTopologyType =
-		D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	// どのように画面に色を打ち込むかの設定（気にしなくて良い）
-	graphicsPipelineStateDesc.SampleDesc.Count = 1;
-	graphicsPipelineStateDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
-
-	// 各ブレンドモードに対してPSOを作成
-	for (int i = 0; i < kCountOfBlendMode; ++i) {
-		// i に応じて blendDesc を設定する
-		graphicsPipelineStateDesc.BlendState = GetBlendDesc((BlendMode)i);
-		dxCommon_->GetDevice()->CreateGraphicsPipelineState(&graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineStates[i]));
+		dxCommon_->GetCommandList()->DrawInstanced(static_cast<UINT>(group.modelData.vertices.size()), kMaxParticleInstance, 0, 0);
 	}
 }
 
@@ -666,18 +587,69 @@ void ParticleManager::CreateParticleGroup(const std::string& groupName, const st
 	// 優先度の設定
 	newGroup.priority = priority;
 
-	// インスタンシング用リソースの生成
-	newGroup.instancingResource = dxCommon_->CreateBufferResource(sizeof(ParticleForGPU) * kMaxParticleInstance);
+	// UAVフラグ付きバッファ
+	D3D12_HEAP_PROPERTIES heapProps{};
+	heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
 
-	// インスタンシング用にSRVを確保してSRVインデックスを記録
+	D3D12_RESOURCE_DESC resourceDesc{};
+	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	resourceDesc.Width = sizeof(ParticleForGPU) * kMaxParticleInstance; // 新しい構造体に変更
+	resourceDesc.Height = 1;
+	resourceDesc.DepthOrArraySize = 1;
+	resourceDesc.MipLevels = 1;
+	resourceDesc.SampleDesc.Count = 1;
+	resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	resourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+	HRESULT hr = dxCommon_->GetDevice()->CreateCommittedResource(
+		&heapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&resourceDesc,
+		D3D12_RESOURCE_STATE_COMMON,
+		nullptr,
+		IID_PPV_ARGS(&newGroup.instancingResource)
+	);
+	assert(SUCCEEDED(hr));
+
+	D3D12_HEAP_PROPERTIES uploadHeapProps{};
+	uploadHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+	D3D12_RESOURCE_DESC uploadResourceDesc = resourceDesc; // サイズはDEFAULT用と同じ
+	uploadResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;   // UPLOADヒープにはUAVフラグを付けられないので外す
+
+	hr = dxCommon_->GetDevice()->CreateCommittedResource(
+		&uploadHeapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&uploadResourceDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&newGroup.instancingUploadResource)
+	);
+	assert(SUCCEEDED(hr));
+
+	// 常にマップしておき、いつでもCPUから書き込めるようにする
+	newGroup.instancingUploadResource->Map(0, nullptr, reinterpret_cast<void**>(&newGroup.instancingData));
+
+	// --- View（ディスクリプタ）の作成 ---
+	// 1つは今まで通りSRV用、もう1つは新しいUAV用として Allocate を 2回 呼び出します
 	newGroup.instancingIndex = srvManager_->Allocate(1);
+	newGroup.uavIndex = srvManager_->Allocate(1);
 
-	// SRV生成
+	// VS描画用の SRV を作成 (既存の関数)
 	srvManager_->CreateSRVforStructuredBuffer(
 		newGroup.instancingIndex,
 		newGroup.instancingResource.Get(),
 		kMaxParticleInstance,
-		sizeof(ParticleForGPU));
+		sizeof(ParticleForGPU)
+	);
+
+	// CS更新用の UAV を作成 (先ほど追加した関数)
+	srvManager_->CreateUAVforStructuredBuffer(
+		newGroup.uavIndex,
+		newGroup.instancingResource.Get(),
+		kMaxParticleInstance,
+		sizeof(ParticleForGPU)
+	);
 
 	// マップに登録
 	particleGroups[groupName] = std::move(newGroup);
@@ -721,18 +693,68 @@ void ParticleManager::CreateParticleGroup(const std::string& groupName, const st
 	// 優先度を設定
 	newGroup.priority = priority;
 
-	// インスタンシング用リソースの生成
-	newGroup.instancingResource = dxCommon_->CreateBufferResource(sizeof(ParticleForGPU) * kMaxParticleInstance);
+	// --- 修正箇所：DEFAULTヒープ＆UAVフラグ付きでバッファを作成 ---
+	D3D12_HEAP_PROPERTIES heapProps{};
+	heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
 
-	// インスタンシング用にSRVを確保してSRVインデックスを記録
+	D3D12_RESOURCE_DESC resourceDesc{};
+	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	resourceDesc.Width = sizeof(ParticleForGPU) * kMaxParticleInstance;
+	resourceDesc.Height = 1;
+	resourceDesc.DepthOrArraySize = 1;
+	resourceDesc.MipLevels = 1;
+	resourceDesc.SampleDesc.Count = 1;
+	resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	resourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+	HRESULT hr = dxCommon_->GetDevice()->CreateCommittedResource(
+		&heapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&resourceDesc,
+		D3D12_RESOURCE_STATE_COMMON,
+		nullptr,
+		IID_PPV_ARGS(&newGroup.instancingResource)
+	);
+	assert(SUCCEEDED(hr));
+
+	D3D12_HEAP_PROPERTIES uploadHeapProps{};
+	uploadHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+	D3D12_RESOURCE_DESC uploadResourceDesc = resourceDesc; // サイズはDEFAULT用と同じ
+	uploadResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;   // UPLOADヒープにはUAVフラグを付けられないので外す
+
+	hr = dxCommon_->GetDevice()->CreateCommittedResource(
+		&uploadHeapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&uploadResourceDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&newGroup.instancingUploadResource)
+	);
+	assert(SUCCEEDED(hr));
+
+	// 常にマップしておき、いつでもCPUから書き込めるようにする
+	newGroup.instancingUploadResource->Map(0, nullptr, reinterpret_cast<void**>(&newGroup.instancingData));
+
+	// --- 修正箇所：SRVとUAVの両方を作成 ---
 	newGroup.instancingIndex = srvManager_->Allocate(1);
+	newGroup.uavIndex = srvManager_->Allocate(1);
 
-	// SRV生成
+	// VS描画用の SRV を作成
 	srvManager_->CreateSRVforStructuredBuffer(
 		newGroup.instancingIndex,
 		newGroup.instancingResource.Get(),
 		kMaxParticleInstance,
-		sizeof(ParticleForGPU));
+		sizeof(ParticleForGPU)
+	);
+
+	// CS更新用の UAV を作成
+	srvManager_->CreateUAVforStructuredBuffer(
+		newGroup.uavIndex,
+		newGroup.instancingResource.Get(),
+		kMaxParticleInstance,
+		sizeof(ParticleForGPU)
+	);
 
 	// マップに登録
 	particleGroups[groupName] = std::move(newGroup);
@@ -983,4 +1005,211 @@ D3D12_BLEND_DESC ParticleManager::GetBlendDesc(BlendMode mode) {
 	}
 
 	return blendDesc;
+}
+
+// ルートシグネチャの作成
+void ParticleManager::CreateRootSignature() {
+	// DescriptorRange作成
+	D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
+	descriptorRange[0].BaseShaderRegister = 0; // 0から始まる
+	descriptorRange[0].NumDescriptors = 128; // 数は1つ
+	descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; // SRVを使う
+	descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND; // offsetを自動計算
+
+	// DescriptorRangeForInstancing作成
+	D3D12_DESCRIPTOR_RANGE DescriptorRangeForInstancing[1] = {};
+	DescriptorRangeForInstancing[0].BaseShaderRegister = 0; // 0から始まる
+	DescriptorRangeForInstancing[0].NumDescriptors = 1; // 数は1つ
+	DescriptorRangeForInstancing[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; // SRVを使う
+	DescriptorRangeForInstancing[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND; // offsetを自動計算
+
+	// RootSignature作成
+	D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature{};
+	descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+	// RootParameter作成
+	D3D12_ROOT_PARAMETER rootParameters[5] = {};
+	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	rootParameters[0].Descriptor.ShaderRegister = 0;
+
+	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	rootParameters[1].DescriptorTable.pDescriptorRanges = DescriptorRangeForInstancing;
+	rootParameters[1].DescriptorTable.NumDescriptorRanges = _countof(DescriptorRangeForInstancing);
+
+	rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRange;
+	rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRange);
+
+	rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	rootParameters[3].Descriptor.ShaderRegister = 1;
+
+	rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV; // CBVを使う
+	rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX; // ★ VertexShaderで使う
+	rootParameters[4].Descriptor.ShaderRegister = 0; // レジスタ番号0を使う
+
+	descriptionRootSignature.pParameters = rootParameters; // ルートパラメーター配列へのポインタ
+	descriptionRootSignature.NumParameters = _countof(rootParameters); // 配列の長さ
+
+	// Samplerの設定
+	D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
+	staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR; // 倍リニアフィルター
+	staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP; // 0~1の範囲外をリピート
+	staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER; // 比較しない
+	staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX; // ありったけのMipmapを使う
+	staticSamplers[0].ShaderRegister = 0; // レジスタ番号０を使う
+	staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; // PixelShaderで使う
+	descriptionRootSignature.pStaticSamplers = staticSamplers;
+	descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
+
+	// シリアライズ「してバイナリにする
+	ID3DBlob* signatureBlob = nullptr;
+	ID3DBlob* errorBlob = nullptr;
+	HRESULT hr = D3D12SerializeRootSignature(&descriptionRootSignature,
+		D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
+	if (FAILED(hr)) {
+		//Log(reinterpret_cast<char*> (errorBlob->GetBufferPointer()));
+		assert(false);
+	}
+	// バイナリを元に生成
+	hr = dxCommon_->GetDevice()->CreateRootSignature(0,
+		signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(),
+		IID_PPV_ARGS(&rootSignature));
+	assert(SUCCEEDED(hr));
+
+	// InputLayout
+	inputElementDescs[0].SemanticName = "POSITION";
+	inputElementDescs[0].SemanticIndex = 0;
+	inputElementDescs[0].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+	inputElementDescs[0].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+	inputElementDescs[1].SemanticName = "TEXCOORD";
+	inputElementDescs[1].SemanticIndex = 0;
+	inputElementDescs[1].Format = DXGI_FORMAT_R32G32_FLOAT;
+	inputElementDescs[1].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+	inputElementDescs[2].SemanticName = "NORMAL";
+	inputElementDescs[2].SemanticIndex = 0;
+	inputElementDescs[2].Format = DXGI_FORMAT_R32G32B32_FLOAT;
+	inputElementDescs[2].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+
+
+	inputLayoutDesc.pInputElementDescs = inputElementDescs;
+	inputLayoutDesc.NumElements = _countof(inputElementDescs);
+
+	// BlendStateの設定
+	// 全ての色要素を書き込む
+	blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	blendDesc.RenderTarget[0].BlendEnable = true; // ブレンドを有効にする
+	blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+
+	// RasiterzerStateの設定
+	// カリングしない（裏面も表示させる）
+	rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
+	// 三角形の中を塗りつぶす
+	rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
+
+	// Shaderをコンパイルする
+	vertexShaderBlob = dxCommon_->CompileShader(L"Resource/shaders/Particle.VS.hlsl", L"vs_6_0");
+	assert(vertexShaderBlob != nullptr);
+
+	pixelShaderBlob = dxCommon_->CompileShader(L"Resource/shaders/Particle.PS.hlsl", L"ps_6_0");
+	assert(pixelShaderBlob != nullptr);
+}
+
+void ParticleManager::CreateComputeRootSignature() {
+	// DescriptorRange作成 (UAV用)
+	D3D12_DESCRIPTOR_RANGE uavRange[1] = {};
+	uavRange[0].BaseShaderRegister = 0; // u0
+	uavRange[0].NumDescriptors = 1;
+	uavRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+	uavRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	// RootParameter作成
+	D3D12_ROOT_PARAMETER rootParameters[2] = {};
+
+	// b0: カメラ等のデータ (定数バッファ)
+	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+	rootParameters[0].Descriptor.ShaderRegister = 0;
+
+	// u0: パーティクルのUAVバッファ (ディスクリプタテーブル)
+	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+	rootParameters[1].DescriptorTable.pDescriptorRanges = uavRange;
+	rootParameters[1].DescriptorTable.NumDescriptorRanges = _countof(uavRange);
+
+	D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
+	rootSignatureDesc.pParameters = rootParameters;
+	rootSignatureDesc.NumParameters = _countof(rootParameters);
+	// ComputeShaderの場合は InputAssembler のフラグは不要です
+
+	// シリアライズと生成
+	ID3DBlob* signatureBlob = nullptr;
+	ID3DBlob* errorBlob = nullptr;
+	HRESULT hr = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
+	assert(SUCCEEDED(hr));
+
+	hr = dxCommon_->GetDevice()->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&computeRootSignature));
+	assert(SUCCEEDED(hr));
+}
+
+// グラフィックスパイプラインの生成
+void ParticleManager::CreateGraphicsPipeline() {
+	//PSO
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineStateDesc{};
+	graphicsPipelineStateDesc.pRootSignature = rootSignature.Get(); // RootSignature
+	graphicsPipelineStateDesc.InputLayout = inputLayoutDesc; // InputLayout
+	graphicsPipelineStateDesc.VS = { vertexShaderBlob->GetBufferPointer(),
+	vertexShaderBlob->GetBufferSize() }; // VertexShader
+	graphicsPipelineStateDesc.PS = { pixelShaderBlob->GetBufferPointer(),
+	pixelShaderBlob->GetBufferSize() }; // PixelShader
+	graphicsPipelineStateDesc.BlendState = blendDesc; // BlendState
+	graphicsPipelineStateDesc.RasterizerState = rasterizerDesc; // RasterizerState
+
+	// テクスチャの透明な部分を見えなくする設定
+	D3D12_DEPTH_STENCIL_DESC particleDepthDesc{};
+	particleDepthDesc.DepthEnable = true;
+	particleDepthDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+	particleDepthDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+	particleDepthDesc.StencilEnable = false;
+
+	// DepthStencilの設定
+	graphicsPipelineStateDesc.DepthStencilState = particleDepthDesc;
+	graphicsPipelineStateDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+	// 書き込むRTVの情報
+	graphicsPipelineStateDesc.NumRenderTargets = 1;
+	graphicsPipelineStateDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	// 利用するトポロジ（形状）のタイプ。三角形
+	graphicsPipelineStateDesc.PrimitiveTopologyType =
+		D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+	// どのように画面に色を打ち込むかの設定（気にしなくて良い）
+	graphicsPipelineStateDesc.SampleDesc.Count = 1;
+	graphicsPipelineStateDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+
+	// 各ブレンドモードに対してPSOを作成
+	for (int i = 0; i < kCountOfBlendMode; ++i) {
+		// i に応じて blendDesc を設定する
+		graphicsPipelineStateDesc.BlendState = GetBlendDesc((BlendMode)i);
+		dxCommon_->GetDevice()->CreateGraphicsPipelineState(&graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineStates[i]));
+	}
+}
+
+void ParticleManager::CreateComputePipeline() {
+	// CSのコンパイル
+	computeShaderBlob = dxCommon_->CompileShader(L"Resource/shaders/Particle.CS.hlsl", L"cs_6_0");
+	assert(computeShaderBlob != nullptr);
+
+	D3D12_COMPUTE_PIPELINE_STATE_DESC computePipelineDesc{};
+	computePipelineDesc.pRootSignature = computeRootSignature.Get();
+	computePipelineDesc.CS = { computeShaderBlob->GetBufferPointer(), computeShaderBlob->GetBufferSize() };
+
+	HRESULT hr = dxCommon_->GetDevice()->CreateComputePipelineState(&computePipelineDesc, IID_PPV_ARGS(&computePipelineState));
+	assert(SUCCEEDED(hr));
 }

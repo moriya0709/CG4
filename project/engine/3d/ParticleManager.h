@@ -49,11 +49,65 @@ struct AccelerationField {
 };
 // パーティクル描画用データ(GPU用)
 struct ParticleForGPU {
-	Matrix4x4 WVP;       // 64バイト
-	Matrix4x4 world;     // 64バイト
-	Vector4 color;       // 16バイト
-	Vector2 uvScale;     // 8バイト
+	// --- 描画用データ ---
+	Matrix4x4 WVP;
+	Matrix4x4 World;
+	Vector4 color;
+	Vector2 uvScale;
 	Vector2 uvOffset;
+
+	// --- 更新計算用パラメータ ---
+	Vector3 translate;
+	float pad1; // アライメント調整
+	Vector3 scale;
+	float pad2;
+	Vector3 rotate;
+	float pad3;
+	Vector3 velocity;
+	float pad4;
+	Vector3 isScaleChange;
+	float pad5;
+
+	Vector4 isColorChange;
+	Vector4 startColor;
+	Vector4 finalColor;
+
+	float lifeTime;
+	float currentTime;
+	float colorChangeSpeed;
+	float scaleAdd;
+	
+	float emissive;
+	Vector2 uvScrollSpeed;
+	int32_t isActive; // 0: 死んでいる, 1: 生きている
+};
+
+// カメラ情報等をCSに送るための定数バッファ
+struct ParticleCommonData {
+	float gDeltaTime;
+	uint32_t gMaxParticles;
+	Vector2 pad1; // 16バイト境界に合わせるためのパディング (8バイト)
+
+	Vector3 gFieldMin; // float3 は16バイト境界からスタートさせる
+	float pad2;    // 16バイト境界に合わせるためのパディング (4バイト)
+
+	Vector3 gFieldMax;
+	float pad3;    // 16バイト境界に合わせるためのパディング (4バイト)
+
+	Vector3 gAcceleration;
+	uint32_t gUseField;
+};
+
+struct ParticleCameraData {
+	Matrix4x4 viewProj;
+	Matrix4x4 billboardMatrix;
+};
+
+// ParticleGroup構造体の中に追加
+struct CPUParticleControl {
+	bool isActive = false;
+	float currentTime = 0.0f;
+	float lifeTime = 0.0f;
 };
 
 class ParticleManager {
@@ -75,12 +129,23 @@ public:
 		uint32_t instanceCount = 0;
 		uint32_t  instancingIndex;
 
+		// UAVインデックス
+		uint32_t uavIndex;
+
 		// このグループに属するパーティクルのリスト
 		std::list<Particle> particles;
 		BlendMode blendMode;
 
 		// 描画順の優先度
 		int priority = 100;
+		// 1フレーム目だけ呼び出す為のフラグ
+		bool isFirstUpdate = true;
+
+		// CPUからのデータ転送用
+		Microsoft::WRL::ComPtr<ID3D12Resource> instancingUploadResource;
+
+		// 生存時間
+		std::vector<CPUParticleControl> cpuControls;
 	};
 	std::unordered_map<std::string, ParticleGroup> particleGroups;
 
@@ -91,11 +156,6 @@ public:
 	void Update();
 	// 描画
 	void Draw();
-
-	// ルートシグネイチャの作成
-	void CreateRootSignature();
-	// グラフィックスパイプラインの生成
-	void CreateGraphicsPipeline();
 
 	// .mtlファイルの読み込み
 	MaterialData LoadMaterialTemplateFile(const std::string& directoryPath, const std::string& filename);
@@ -170,15 +230,19 @@ private:
 
 	// ルートシグネイチャ
 	Microsoft::WRL::ComPtr <ID3D12RootSignature> rootSignature = nullptr;
+	Microsoft::WRL::ComPtr <ID3D12RootSignature> computeRootSignature = nullptr;
 	D3D12_INPUT_LAYOUT_DESC inputLayoutDesc{};
 	D3D12_INPUT_ELEMENT_DESC inputElementDescs[3] = {};
 	Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = nullptr;
 	Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob = nullptr;
+	Microsoft::WRL::ComPtr<IDxcBlob> computeShaderBlob = nullptr;
 	D3D12_BLEND_DESC blendDesc{};
 	D3D12_RASTERIZER_DESC rasterizerDesc{};
 
 	// グラフィックスパイプライン
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineStates[kCountOfBlendMode];
+	// コンピュートパイプライン
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> computePipelineState = nullptr;
 
 	// Objファイルのデータ
 	ModelData modelData;
@@ -186,10 +250,14 @@ private:
 	// バッファリソース
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource;
 	Microsoft::WRL::ComPtr<ID3D12Resource> materialResource;
+	Microsoft::WRL::ComPtr<ID3D12Resource> commonDataResource_;
+	Microsoft::WRL::ComPtr<ID3D12Resource> cameraDataResource_;
 
 	// バッファリソース内のデータを指すポインタ
 	VertexData* vertexData = nullptr;
 	Material* materialData = nullptr;
+	ParticleCommonData* commonDataMap_ = nullptr;
+	ParticleCameraData* cameraDataMap_ = nullptr;
 
 	// バッファリソースの使い道を補足するバッファビュー
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
@@ -217,6 +285,14 @@ private:
 
 	// ブレンドモードに応じた D3D12_BLEND_DESC を生成して返す関数
 	D3D12_BLEND_DESC GetBlendDesc(BlendMode mode);
+
+	// ルートシグネチャ
+	void CreateRootSignature();			// 通常
+	void CreateComputeRootSignature();	// コンピュート
+	// グラフィックスパイプラインの生成
+	void CreateGraphicsPipeline();
+	// コンピュートパイプライン
+	void CreateComputePipeline();
 
 };
 

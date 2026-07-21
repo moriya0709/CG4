@@ -1,40 +1,70 @@
+﻿// Particle.VS.hlsl
 #include "Particle.hlsli"
 
-struct ParticleForGPU
+cbuffer CameraData : register(b0)
 {
-    float32_t4x4 WVP;
-    float32_t4x4 World;
-    float32_t4 color;
-    float2 uvScale;
-    float2 uvOffset; // ★ padding を uvOffset に変更
+    matrix viewProj;
+    matrix billboardMatrix; // CPUの Inverse(view) を渡します
 };
 
-StructuredBuffer<ParticleForGPU> gParticle : register(t0);
+StructuredBuffer<Particle> gParticles : register(t0);
 
-struct VertexShaderInput
+struct VSInput
 {
-    float32_t4 position : POSITION0;
-    float32_t2 texcoord : TEXCOORD0;
-    float32_t3 normal : NORMAL0;
+    float4 position : POSITION;
+    float2 uv : TEXCOORD;
 };
 
-VertexShaderOutput main(VertexShaderInput input, uint32_t instanceId : SV_InstanceID)
+VertexShaderOutput main(VSInput input, uint instanceId : SV_InstanceID)
 {
     VertexShaderOutput output;
+    Particle p = gParticles[instanceId];
+
+    // スケール行列
+    matrix scaleMatrix =
+    {
+        p.scale.x, 0, 0, 0,
+        0, p.scale.y, 0, 0,
+        0, 0, p.scale.z, 0,
+        0, 0, 0, 1
+    };
+
+    // 回転行列（ビルボード行列を適用）
+    matrix rotateMatrix = billboardMatrix;
+
+    // 平行移動行列
+    matrix translateMatrix =
+    {
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        p.translate.x, p.translate.y, p.translate.z, 1
+    };
+
+    // ワールド行列の合成 (S * R * T)
+    matrix world = mul(scaleMatrix, mul(rotateMatrix, translateMatrix));
     
-    // 座標変換
-    output.position = mul(input.position, gParticle[instanceId].WVP);
+    // WVP変換
+    output.position = mul(input.position, mul(world, viewProj));
+
+    // =========================================================
+    // ★修正箇所：構造体のすべての要素に値を入れる！
+    // =========================================================
     
-    // ★修正: スケールを掛けた後に、オフセット（スクロール移動量）を足す
-    output.texcoord = (input.texcoord * gParticle[instanceId].uvScale) + gParticle[instanceId].uvOffset;
-    
-    // 法線と色
-    output.normal = normalize(mul(input.normal, (float32_t3x3) gParticle[instanceId].World));
-    output.color = gParticle[instanceId].color;
-    
-    // ※Particle.hlsli 側に `float32_t2 uv : TEXCOORD1;` が定義されている場合、
-    // 値を入れないと警告やエラーになるため、計算済みのtexcoordを入れておきます
-    output.uv = output.texcoord;
-    
+    // 1. texcoord (TEXCOORD0) : ベースのUV座標をそのまま渡す
+    output.texcoord = input.uv;
+
+    // 2. uv (TEXCOORD1) : スケール・オフセットを適用したUVを渡す
+    output.uv = input.uv * p.uvScale + p.uvOffset;
+
+    // 3. normal (NORMAL0) : パーティクルなので適当な正面方向を入れておく
+    output.normal = float3(0.0f, 0.0f, -1.0f);
+
+    // =========================================================
+
+    // カラー（エミッシブの適用）
+    output.color.rgb = p.color.rgb * p.emissive;
+    output.color.a = p.color.a;
+
     return output;
 }
