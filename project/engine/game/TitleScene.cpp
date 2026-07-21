@@ -21,6 +21,7 @@ void TitleScene::Initialize() {
 	object = std::make_unique <Object>();
 	object->Initialize(camera.get());
 	object->SetTranslate({ 0.0f, 0.0f, 0.0f });
+	object->SetRotate({ 0.0f, 3.14f, 0.0f });
 
 	// 初期化済みの3Dオブジェクトにモデルを紐づける
 	object->SetModel("walk.gltf");
@@ -71,7 +72,6 @@ void TitleScene::Initialize() {
 	// 線
 	line = std::make_unique<Line>();
 	line->Initialize(camera.get());
-	line->AddLine(Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 10.0f, 0.0f));
 	
 	// 音声再生
 	//SoundManager::GetInstance()->Play("bgm");
@@ -86,6 +86,7 @@ void TitleScene::Update() {
 
 	// * 3Dオブジェクト* //
 	object->Update();
+	object->BoneLineUpdate(line.get());
 
 	//　線
 	line->Update();
@@ -418,7 +419,8 @@ void TitleScene::Draw3D() {
 	// 線描画準備
 	LineCommon::GetInstance()->SetCommonPipelineState();
 	
-	//line->Draw();
+	line->Draw();
+	line->Clear();
 	
 }
 

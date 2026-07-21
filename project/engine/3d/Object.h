@@ -12,11 +12,11 @@
 #include "Calc.h"
 #include "RayMarching.h"
 #include "CommonStructs.h"
-#include "Line.h"
 
 class Model;
 class Camera;
 class DirectXCommon;
+class Line;
 
 // 平行光源データ
 struct DirectionalLight {
@@ -71,6 +71,7 @@ public:
 	void Initialize(Camera* camera);
 	// 更新
 	void Update();
+	void BoneLineUpdate(Line* line);
 	// 描画
 	void Draw();
 
