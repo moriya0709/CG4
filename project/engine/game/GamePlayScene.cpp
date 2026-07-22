@@ -15,6 +15,11 @@ void GamePlayScene::Initialize() {
 	CameraManager::GetInstance()->AddCamera("main", camera.get());
 	CameraManager::GetInstance()->SetActiveCamera("main");
 
+	// レベル
+	level = std::make_unique<Level>();
+	level->LoadJson("scene");
+	CreateLevel();
+
 	// スプライト
 	sprite = std::make_unique <Sprite>();
 	sprite->Initialize("Resource/monsterBall.png");
@@ -25,15 +30,9 @@ void GamePlayScene::Initialize() {
 		object[i]->Initialize(camera.get());
 	}
 
-	// Emitパーティクル発生
-	particleEmitter = std::make_unique <ParticleEmitter>();
-	particleEmitter->Initialize("group1", transformParticle, 5, 1.0f);
-	particleEmitter->Emit();
-	particleEmitter->LoadParticle("Resource/particle/fire.csv");
-
 	// 初期化済みの3Dオブジェクトにモデルを紐づける
-	object[0]->SetModel("emission.obj");
-	object[1]->SetModel("skydome.obj");
+	object[0]->SetModel("cube.gltf");
+	object[1]->SetModel("cube.gltf");
 
 	// 音声再生
 	//SoundManager::GetInstance()->Play("bgm");
@@ -46,6 +45,11 @@ void GamePlayScene::Update() {
 	// カメラ更新
 	CameraManager::GetInstance()->Update();
 
+	// レベルオブジェクト
+	for (auto& object : levelObjects) {
+		object->Update();
+	}
+
 	// ENTERキーを押したら
 	if (input->TriggerKey(DIK_RETURN)) {
 		// ゲームプレイシーン(次シーン)を生成
@@ -57,8 +61,7 @@ void GamePlayScene::Update() {
 		OutputDebugStringA("Hit 0\n"); // 出力ウィンドウに「Hit ０」と表示
 		// テクスチャ変更
 		sprite->ChangeTexture("Resource/uvChecker.png");
-		particleEmitter->SetActive("group2");
-
+		
 		// エフェクト有効化(色反転)
 		PostEffect::GetInstance()->SetInversion(true);
 	}
@@ -68,17 +71,12 @@ void GamePlayScene::Update() {
 		object[i]->Update();
 	}
 
-	// パーティクルエミッタ更新
-	particleEmitter->Editor();
-	particleEmitter->Update();
-
-
 	// *スプライト* //
 	// sprite更新
 	sprite->Update();
 
 	// スカイボックス
-	Skybox::GetInstance()->Update();
+	//Skybox::GetInstance()->Update();
 
 #pragma region ライティング
 	// *ライティング* //
@@ -105,6 +103,32 @@ void GamePlayScene::Update() {
 		object[i]->SetSpotLightRange(SpotLightRange);
 		object[i]->SetSpotLightIntensity(SpotLightIntensity);
 	}
+
+	// レベルオブジェクト
+	for (auto& levelObj : levelObjects) {
+		// 平行光
+		levelObj->SetDirectionalLight(isDirectionalLight);
+		levelObj->SetDirectionalLightDirection(DirectionalLightDirection);
+		levelObj->SetDirectionalLightColor(DirectionalLightColor);
+		levelObj->SetDirectionalLightIntensity(DirectionalLightIntensity);
+		// 環境光
+		levelObj->SetAmbientLight(isAmbientLight);
+		levelObj->SetAmbientLightColor(AmbientLightColor);
+		levelObj->SetAmbientLightIntensity(AmbientLightIntensity);
+		// ポイントライト
+		levelObj->SetPointLight(isPointLight);
+		levelObj->SetPointLightColor(PointLightColor);
+		levelObj->SetPointLightPosition(PointLightPosition);
+		levelObj->SetPointLightIntensity(PointLightIntensity);
+		// スポットライト
+		levelObj->SetSpotLight(isSpotLight);
+		levelObj->SetSpotLightColor(SpotLightColor);
+		levelObj->SetSpotLightPosition(SpotLightPosition);
+		levelObj->SetSpotLightDirection(SpotLightDirection);
+		levelObj->SetSpotLightRange(SpotLightRange);
+		levelObj->SetSpotLightIntensity(SpotLightIntensity);
+	}
+
 #pragma endregion
 
 #pragma region ポストエフェクト
@@ -367,11 +391,15 @@ void GamePlayScene::Draw2D() {
 }
 void GamePlayScene::Draw3D() {
 	// スカイボックス
-	Skybox::GetInstance()->Draw();
+	//Skybox::GetInstance()->Draw();
 
 	// 3Dオブジェクトの描画準備
 	ObjectCommon::GetInstance()->SetCommonPipelineState();
 
+	// レベルオブジェクト
+	for (auto& object : levelObjects) {
+		object->Draw();
+	}
 
 	// 3Dオブジェクト描画
 	for (int i = 0; i < 2; i++) {
@@ -391,4 +419,27 @@ void GamePlayScene::Draw3D() {
 
 void GamePlayScene::Finalize() {
 	CameraManager::GetInstance()->RemoveCamera("main");
+}
+
+void GamePlayScene::CreateLevel() {
+	for (auto& objectData : level->GetLevelData()->objects) {
+		// レベル用オブジェクト初期化（ループの中で毎回新しいオブジェクトを生成する）
+		levelObjects.push_back(std::make_unique<Object>());
+		levelObjects.back()->Initialize(camera.get());
+
+		// モデルセット
+		levelObjects.back()->SetModel(objectData.file_name);
+
+		// 座標設定
+		levelObjects.back()->SetTranslate(objectData.transform.translate);
+
+		// 回転設定（SetTranslateから変更）
+		levelObjects.back()->SetRotate(objectData.transform.rotate);
+
+		// 拡大縮小設定（SetTranslateから変更）
+		levelObjects.back()->SetScale(objectData.transform.scale);
+
+		std::string debugMsg = "LevelObject File: [" + objectData.file_name + "]\n";
+		OutputDebugStringA(debugMsg.c_str());
+	}
 }

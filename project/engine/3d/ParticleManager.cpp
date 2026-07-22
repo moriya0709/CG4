@@ -94,6 +94,10 @@ void ParticleManager::Update() {
 
 	auto commandList = dxCommon_->GetCommandList();
 
+	// ディスクリプタヒープをコマンドリストにセットする
+	ID3D12DescriptorHeap* descriptorHeaps[] = { dxCommon_->GetSrvHeap()};
+	commandList->SetDescriptorHeaps(1, descriptorHeaps);
+
 	// CS用のパイプラインとルートシグネチャをセット
 	commandList->SetComputeRootSignature(computeRootSignature.Get());
 	commandList->SetPipelineState(computePipelineState.Get());

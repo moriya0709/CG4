@@ -100,6 +100,11 @@ void TitleScene::Update() {
 		object->PlayAnimation("sneakWalk", 1.0f);
 	}
 
+	if (input->TriggerKey(DIK_SPACE)) {
+		// ゲームプレイシーン(次シーン)を生成
+		SceneManager::GetInstance()->ChangeScene("GAMEPLAY");
+	}
+
 	// *パーティクル* //
 	//if (isTornado) {
 	//	for (int i = 0; i < kTornadoCount; i++) {

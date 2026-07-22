@@ -14,6 +14,8 @@
 #include "BaseScene.h"
 #include "PostEffect.h"
 #include "RailCamera.h"
+#include "Level.h"
+#include <vector>
 
 using namespace DirectX;
 
@@ -131,7 +133,7 @@ private:
 	bool rayMarchingIsAnimeLight = true;
 	bool  rayMarchingIsMotionBlur = true;
 	float  rayMarchingCloudOpacity = 0.04f;
-	bool isStorm = true;
+	bool isStorm = false;
 	float thunderFrequency = 0.3f;
 	float thunderBrightness = 120.0f;
 
@@ -144,6 +146,11 @@ private:
 	std::unique_ptr <Sprite> sprite = nullptr;
 	// 3Dオブジェクト
 	std::unique_ptr <Object> object[2]{};
-	// パーティクルエミッタ
-	std::unique_ptr <ParticleEmitter> particleEmitter = nullptr;
+	// レベル
+	std::unique_ptr <Level> level = nullptr;
+	std::vector<std::unique_ptr <Object>> levelObjects;
+
+	// レベルデータからオブジェクト生成、配置
+	void CreateLevel();
+
 };

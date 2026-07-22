@@ -129,76 +129,85 @@ void Model::Initialize(ModelCommon* modelCommon, DirectXCommon* dxCommon, SrvMan
 }
 
 void Model::Update() {
-	float deltaTime = 1.0f / 60.0f; // 毎フレームの加算時間（環境に合わせて可変フレームレートにしてもOK）
+	// 1. アニメーションが設定されている場合のみ再生（時間の進行と姿勢の適用）を行う
+	if (currentAnimation_) {
+		float deltaTime = 1.0f / 60.0f; // 毎フレームの加算時間
 
-    // アニメーションの進行とブレンド状態の更新
-    if (currentAnimation_) {
-        // 現在のアニメーション時間を進める
-        currentAnimationTime_ = std::fmod(currentAnimationTime_ + deltaTime, currentAnimation_->duration);
+		// 現在のアニメーション時間を進める
+		currentAnimationTime_ = std::fmod(currentAnimationTime_ + deltaTime, currentAnimation_->duration);
 
-        if (isBlending_ && nextAnimation_) {
-            // 遷移先のアニメーション時間も進める
-            nextAnimationTime_ = std::fmod(nextAnimationTime_ + deltaTime, nextAnimation_->duration);
-            
-            // ブレンド率を進行させる
-            blendFactor_ += deltaTime / blendDuration_;
+		if (isBlending_ && nextAnimation_) {
+			// 遷移先のアニメーション時間も進める
+			nextAnimationTime_ = std::fmod(nextAnimationTime_ + deltaTime, nextAnimation_->duration);
 
-            if (blendFactor_ >= 1.0f) {
-                // ブレンドが完了したら、next を current に切り替える
-                currentAnimation_ = nextAnimation_;
-                currentAnimationTime_ = nextAnimationTime_;
-                nextAnimation_ = nullptr;
-                isBlending_ = false;
-                blendFactor_ = 0.0f;
-            }
-        }
-    }
+			// ブレンド率を進行させる
+			blendFactor_ += deltaTime / blendDuration_;
 
-    // 姿勢の適用
-    if (isBlending_ && nextAnimation_) {
-        // ブレンド中
-        ApplyAnimationBlend(skeleton, currentAnimation_, currentAnimationTime_, nextAnimation_, nextAnimationTime_, blendFactor_);
-    } else if (currentAnimation_) {
-        // 単一再生中（既存の関数を利用）
-        ApplyAnimation(skeleton, *currentAnimation_, currentAnimationTime_);
-    }
+			if (blendFactor_ >= 1.0f) {
+				// ブレンドが完了したら切り替える
+				currentAnimation_ = nextAnimation_;
+				currentAnimationTime_ = nextAnimationTime_;
+				nextAnimation_ = nullptr;
+				isBlending_ = false;
+				blendFactor_ = 0.0f;
+			}
 
-	// 全てのJointを更新。親が若いので通常ループで処理可能になっている
-	for (Joint& joint : skeleton.joints) {
-		joint.localMatrix = MakeAffineMatrix(joint.transform.scale, joint.transform.rotate, joint.transform.translate);
-		if (joint.parent) {
-			joint.skeletonSpaceMatrix = joint.localMatrix * skeleton.joints[*joint.parent].skeletonSpaceMatrix;
+			// ブレンド中の姿勢の適用
+			ApplyAnimationBlend(skeleton, currentAnimation_, currentAnimationTime_, nextAnimation_, nextAnimationTime_, blendFactor_);
 		} else {
-			joint.skeletonSpaceMatrix = joint.localMatrix;
+			// 単一再生中の姿勢の適用（既存の関数を利用）
+			ApplyAnimation(skeleton, *currentAnimation_, currentAnimationTime_);
 		}
 	}
 
-	// スキンクラスタの更新
-	for (size_t jointIndex = 0; jointIndex < skeleton.joints.size(); ++jointIndex) {
-		assert(jointIndex < skinCluster.inverseBindPoseMatrices.size());
-		skinCluster.mappedPalette[jointIndex].skeletonSpaceMatrix =
-			skinCluster.inverseBindPoseMatrices[jointIndex] * skeleton.joints[jointIndex].skeletonSpaceMatrix;
-		skinCluster.mappedPalette[jointIndex].skeletonSpaceInverseTransposeMatrix =
-			Transpose(Inverse(skinCluster.mappedPalette[jointIndex].skeletonSpaceMatrix));
-	}
+	// 2. スケルトン（ボーン）が存在する場合のみ、行列計算とスキニングを行う
+	if (!skeleton.joints.empty()) {
+		// 全てのJointを更新。親が若いので通常ループで処理可能
+		for (Joint& joint : skeleton.joints) {
+			joint.localMatrix = MakeAffineMatrix(joint.transform.scale, joint.transform.rotate, joint.transform.translate);
+			if (joint.parent) {
+				joint.skeletonSpaceMatrix = joint.localMatrix * skeleton.joints[*joint.parent].skeletonSpaceMatrix;
+			} else {
+				joint.skeletonSpaceMatrix = joint.localMatrix;
+			}
+		}
 
-	DispatchSkinning();
+		// スキンクラスタの更新
+		for (size_t jointIndex = 0; jointIndex < skeleton.joints.size(); ++jointIndex) {
+			assert(jointIndex < skinCluster.inverseBindPoseMatrices.size());
+			skinCluster.mappedPalette[jointIndex].skeletonSpaceMatrix =
+				skinCluster.inverseBindPoseMatrices[jointIndex] * skeleton.joints[jointIndex].skeletonSpaceMatrix;
+			skinCluster.mappedPalette[jointIndex].skeletonSpaceInverseTransposeMatrix =
+				Transpose(Inverse(skinCluster.mappedPalette[jointIndex].skeletonSpaceMatrix));
+		}
+
+		// コンピュートシェーダーによるスキニングを実行
+		DispatchSkinning();
+	}
 }
 
 void Model::Draw() {
-
 	// RootSignatureを設定。PSOに設定しているけど別途設定が必要
 	if (IsSkinning()) {
 		D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {
-			vertexBufferView,
+			vertexBufferView, // outputVertexResourceを指すVBV
 			skinCluster.influenceBufferView
 		};
 		// アニメーション用：スロット0と1の「2つ」をセット
 		dxCommon_->GetCommandList()->IASetVertexBuffers(0, 2, vbvs);
 	} else {
-		// 通常モデル用：スロット0の「1つ」だけをセット
-		dxCommon_->GetCommandList()->IASetVertexBuffers(0, 1, &vertexBufferView);
+		// =========================================================
+		// 【修正】通常モデル用：計算前の正しいデータが入っている inputVertexResource を使う
+		// =========================================================
+		D3D12_VERTEX_BUFFER_VIEW inputVbv{};
+		inputVbv.BufferLocation = inputVertexResource->GetGPUVirtualAddress();
+		inputVbv.SizeInBytes = UINT(sizeof(VertexData) * modelData.vertices.size());
+		inputVbv.StrideInBytes = sizeof(VertexData);
+
+		// スロット0の「1つ」だけをセット
+		dxCommon_->GetCommandList()->IASetVertexBuffers(0, 1, &inputVbv);
 	}
+
 	// インデックスバッファビューを設定
 	dxCommon_->GetCommandList()->IASetIndexBuffer(&indexBufferView);
 
@@ -211,7 +220,6 @@ void Model::Draw() {
 
 	// 描画
 	dxCommon_->GetCommandList()->DrawIndexedInstanced(static_cast<UINT>(modelData.indices.size()), 1, 0, 0, 0);
-
 }
 
 void Model::BoneLineUpdate(Line* line, const Vector3& scale, const Vector3& rotate, const Vector3& translate) {
