@@ -102,7 +102,8 @@ void Object::Update() {
 	transformationMatrixData->prevWVP = currentWVP_;
 
 	// アニメーション
-	model_->Update();
+	if(model_)
+		model_->Update();
 
 	// 通常通り、現在のワールド行列を計算
 	Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
@@ -125,6 +126,10 @@ void Object::BoneLineUpdate(Line* line, const Vector3& scale, const Vector3& rot
 }
 
 void Object::Draw() {
+	if (!model_) {
+		return;
+	}
+
 	if (model_->IsSkinning()) {
 		// アニメーション
 		ObjectCommon::GetInstance()->SetAnimationPipelineState();

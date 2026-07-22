@@ -249,6 +249,9 @@
     <ClCompile Include="engine\3d\LineCommon.cpp">
       <Filter>ソース ファイル\engine\3d</Filter>
     </ClCompile>
+    <ClCompile Include="Level.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Resource\shaders\Object3d.PS.hlsl">
@@ -456,6 +459,9 @@
     </ClInclude>
     <ClInclude Include="engine\3d\AnimationManager.h">
       <Filter>ヘッダー ファイル\engine\3d</Filter>
+    </ClInclude>
+    <ClInclude Include="Level.h">
+      <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
