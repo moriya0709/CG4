@@ -133,12 +133,13 @@ void Model::Update() {
 	if (currentAnimation_) {
 		float deltaTime = 1.0f / 60.0f; // 毎フレームの加算時間
 
-		// 現在のアニメーション時間を進める
-		currentAnimationTime_ = std::fmod(currentAnimationTime_ + deltaTime, currentAnimation_->duration);
+		// duration が 0 の場合の安全対策
+		float currentDuration = (currentAnimation_->duration > 0.0f) ? currentAnimation_->duration : 1.0f;
+		currentAnimationTime_ = std::fmod(currentAnimationTime_ + deltaTime, currentDuration);
 
 		if (isBlending_ && nextAnimation_) {
-			// 遷移先のアニメーション時間も進める
-			nextAnimationTime_ = std::fmod(nextAnimationTime_ + deltaTime, nextAnimation_->duration);
+			float nextDuration = (nextAnimation_->duration > 0.0f) ? nextAnimation_->duration : 1.0f;
+			nextAnimationTime_ = std::fmod(nextAnimationTime_ + deltaTime, nextDuration);
 
 			// ブレンド率を進行させる
 			blendFactor_ += deltaTime / blendDuration_;
@@ -150,19 +151,21 @@ void Model::Update() {
 				nextAnimation_ = nullptr;
 				isBlending_ = false;
 				blendFactor_ = 0.0f;
-			}
 
-			// ブレンド中の姿勢の適用
-			ApplyAnimationBlend(skeleton, currentAnimation_, currentAnimationTime_, nextAnimation_, nextAnimationTime_, blendFactor_);
+				// ブレンド完了時は単一アニメーションとして適用
+				ApplyAnimation(skeleton, *currentAnimation_, currentAnimationTime_);
+			} else {
+				// ブレンド中の場合のみブレンド適用
+				ApplyAnimationBlend(skeleton, currentAnimation_, currentAnimationTime_, nextAnimation_, nextAnimationTime_, blendFactor_);
+			}
 		} else {
-			// 単一再生中の姿勢の適用（既存の関数を利用）
+			// 単一再生中の姿勢の適用
 			ApplyAnimation(skeleton, *currentAnimation_, currentAnimationTime_);
 		}
 	}
 
 	// 2. スケルトン（ボーン）が存在する場合のみ、行列計算とスキニングを行う
 	if (!skeleton.joints.empty()) {
-		// 全てのJointを更新。親が若いので通常ループで処理可能
 		for (Joint& joint : skeleton.joints) {
 			joint.localMatrix = MakeAffineMatrix(joint.transform.scale, joint.transform.rotate, joint.transform.translate);
 			if (joint.parent) {
@@ -172,7 +175,6 @@ void Model::Update() {
 			}
 		}
 
-		// スキンクラスタの更新
 		for (size_t jointIndex = 0; jointIndex < skeleton.joints.size(); ++jointIndex) {
 			assert(jointIndex < skinCluster.inverseBindPoseMatrices.size());
 			skinCluster.mappedPalette[jointIndex].skeletonSpaceMatrix =
@@ -181,7 +183,6 @@ void Model::Update() {
 				Transpose(Inverse(skinCluster.mappedPalette[jointIndex].skeletonSpaceMatrix));
 		}
 
-		// コンピュートシェーダーによるスキニングを実行
 		DispatchSkinning();
 	}
 }
@@ -661,7 +662,7 @@ void Model::ApplyAnimationBlend(Skeleton& skeleton, const Animation* currentAnim
 			nextScale = animationManager_->CalculateValue(rootNodeAnimation.scale.keyframes, nextTime);
 		}
 
-		// 🔴 修正：回転の補間（最短経路のための内積チェックを追加）
+		// 回転の補間（最短経路のための内積チェックを追加）
 		float dot = currentRotate.x * nextRotate.x +
 			currentRotate.y * nextRotate.y +
 			currentRotate.z * nextRotate.z +

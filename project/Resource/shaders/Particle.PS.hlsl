@@ -1,4 +1,4 @@
-#include "Particle.hlsli"
+﻿#include "Particle.hlsli"
 
 struct Material
 {
@@ -133,14 +133,14 @@ PixelShaderOutput main(VertexShaderOutput input)
     // ディゾルブの進行度（C++側で強制設定した寿命の割合 1.0～0.0 を使用）
     float threshold = 1.0f - input.color.a;
 
-    if (gMaterial.useNoise == 0)
+    if (input.useNoise == 0)
     {
         // 【パターン0】画像テクスチャのみ（従来の挙動）
         // ノイズを使わない場合は、従来通り寿命に合わせてじわじわ半透明にして消します
         output.color = baseColor * textureColor;
         output.color.a *= input.color.a;
     }
-    else if (gMaterial.useNoise == 1)
+    else if (input.useNoise == 1)
     {
         // 【パターン1】プロシージャルノイズのみ（画像なし・クッキリ消える）
         float noiseValue = FBM(transformedUV.xy, 5.0f);
@@ -162,10 +162,10 @@ PixelShaderOutput main(VertexShaderOutput input)
         float edgeWidth = 0.05f;
         if (noiseValue < currentThreshold + edgeWidth)
         {
-            output.color.rgb += gMaterial.burnColor * 4.0f;
+            output.color.rgb += input.burnColor * 4.0f;
         }
     }
-    else if (gMaterial.useNoise == 2)
+    else if (input.useNoise == 2)
     {
         // 【パターン2】画像テクスチャ ＋ ノイズディゾルブ（クッキリ消える）
         float noiseValue = FBM(transformedUV.xy, 5.0f);
@@ -184,7 +184,7 @@ PixelShaderOutput main(VertexShaderOutput input)
         float edgeWidth = 0.05f;
         if (noiseValue < threshold + edgeWidth)
         {
-            output.color.rgb += gMaterial.burnColor * 4.0f * textureColor.a;
+            output.color.rgb += input.burnColor * 4.0f * textureColor.a;
         }
     }
 

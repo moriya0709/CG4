@@ -79,6 +79,44 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager
 	accelerationField.area.min = { -1.0f,-1.0f,-1.0f };
 	accelerationField.area.max = { 1.0f,1.0f,1.0f };
 
+	// *エミッタ* //
+	bufferSize = (sizeof(Emitter) + 255) & ~255;
+	emitDataResource_ = dxCommon_->CreateBufferResource(bufferSize);
+
+	// 常にマッピングしておく
+	hr = emitDataResource_->Map(0, nullptr, reinterpret_cast<void**>(&emitDataMap_));
+	assert(SUCCEEDED(hr));
+
+	// 初期値を設定
+	emitDataMap_->color;
+	emitDataMap_->uvScale;	// UVスケール
+	emitDataMap_->uvOffset;	// UVオフセット
+	emitDataMap_->translate;
+	emitDataMap_->scale;
+	emitDataMap_->rotate;
+	emitDataMap_->isRandPosition;	// ランダムな座標にするかどうか
+	emitDataMap_->isRandScale;	// ランダムなスケールにするかどうか
+	emitDataMap_->isRandRotate;	// ランダムな回転にするかどうか
+	emitDataMap_->isRandVelocity;	// ランダムに動かすかどうか
+	emitDataMap_->isScaleChange;	// スケール変更するかどうか
+	emitDataMap_->isColorChange;	// 色変更するかどうか
+	emitDataMap_->finalColor;
+	emitDataMap_->lifeTime;
+	emitDataMap_->currentTime;
+	emitDataMap_->colorChangeSpeed;
+	emitDataMap_->scaleAdd;			// スケール変更量
+	emitDataMap_->emissive;			// エミッシブ
+	emitDataMap_->uvScrollSpeed;	// UVスクロール速度
+	emitDataMap_->useNoise;		// 0:通常 1:ノイズテクスチャ 2:両方
+	emitDataMap_->burnColor;		// ふちの色
+	emitDataMap_->count; //!< 発生数
+	emitDataMap_->frequency; //!< 発生頻度
+	emitDataMap_->frequencyTime; //!< 頻度用時刻
+	emitDataMap_->randPosition;
+	emitDataMap_->randScale;
+	emitDataMap_->randRotate;
+	emitDataMap_->randVelocity;
+
 	// ルートシグネイチャの作成
 	CreateRootSignature();			// 通常
 	CreateComputeRootSignature();	// コンピュート
@@ -172,15 +210,15 @@ void ParticleManager::Update() {
 			group.instancingData[freeIndex].uvScrollSpeed = particle.uvScrollSpeed;
 
 			group.instancingData[freeIndex].isColorChange = {
-				particle.isColorChange[0] ? 1.0f : 0.0f,
-				particle.isColorChange[1] ? 1.0f : 0.0f,
-				particle.isColorChange[2] ? 1.0f : 0.0f,
-				particle.isColorChange[3] ? 1.0f : 0.0f
+				particle.isColorChange[0] ? 1 : 0,
+				particle.isColorChange[1] ? 1 : 0,
+				particle.isColorChange[2] ? 1 : 0,
+				particle.isColorChange[3] ? 1 : 0
 			};
 			group.instancingData[freeIndex].isScaleChange = {
-				particle.isScaleChange[0] ? 1.0f : 0.0f,
-				particle.isScaleChange[1] ? 1.0f : 0.0f,
-				particle.isScaleChange[2] ? 1.0f : 0.0f
+				particle.isScaleChange[0] ? 1 : 0,
+				particle.isScaleChange[1] ? 1 : 0,
+				particle.isScaleChange[2] ? 1 : 0
 			};
 
 			// 行列は初期化状態（※後述の注意点を参照）
@@ -260,19 +298,7 @@ void ParticleManager::Draw() {
 
 	for (auto& groupPair : particleGroups) {
 		ParticleGroup& group = groupPair.second;
-
-		// CPU側の管理データを見て、1つでもアクティブな（生存している）パーティクルがあれば描画対象にする
-		bool hasActiveParticle = false;
-		for (uint32_t i = 0; i < kMaxParticleInstance; ++i) {
-			if (group.cpuControls[i].isActive) {
-				hasActiveParticle = true;
-				break;
-			}
-		}
-
-		if (hasActiveParticle) {
-			sortedGroups.push_back(&group);
-		}
+		sortedGroups.push_back(&group);
 	}
 
 	// ---------------------------------------------------------
@@ -510,21 +536,8 @@ Particle ParticleManager::MakeNewParticleEditor(
 // パーティクルの発生
 void ParticleManager::Emit(
 	const std::string& name,
-	const Vector3& position,
-	const Vector3& scale,
-	const Vector3& rotate,
-	uint32_t count,
-	std::uniform_real_distribution<float> distPosition,
-	std::uniform_real_distribution<float>distScale,
-	std::uniform_real_distribution<float>distRotate,
-	std::uniform_real_distribution<float> distVelocity,
-	std::uniform_real_distribution<float> distTime,
-	bool isRandPosition[3], bool isRandScale[3],
-	bool isRandRotate[3], bool isRandVelocity[3], Vector4 color,
-	float emissive, BlendMode blendMode, Vector4 finalColor,
-	float colorChangeSpeed, bool isColorChange[4], bool isScaleChange[3],
-	float scaleAdd, Vector2 uvScale, Vector2 uvScrollSpeed, 
-	Vector2 uvOffset, int32_t useNoise, Vector3 burnColor
+	Emitter* emitter,
+	BlendMode blendMode
 ) {
 	assert(particleGroups.count(name));
 
@@ -533,23 +546,31 @@ void ParticleManager::Emit(
 	// ブレンドモードを設定
 	group.blendMode = blendMode;
 
-	for (uint32_t i = 0; i < count; ++i) {
-		if (group.particles.size() >= kMaxParticleInstance) {
-			break;
-		}
+	// パラメータ
+	*emitDataMap_ = *emitter;
 
-		// ノイズテクスチャ設定
-		group.material->useNoise = useNoise;
-		group.material->burnColor = burnColor;
+	// *Dispatch* //
 
-		group.particles.push_back(
-			MakeNewParticleEditor(randomEngine, position, scale,rotate,
-				distPosition, distScale, distRotate, distVelocity, distTime,
-				isRandPosition, isRandScale, isRandRotate, isRandVelocity,
-				color, emissive, finalColor, colorChangeSpeed,
-				isColorChange, isScaleChange, scaleAdd, uvScale, uvScrollSpeed, 
-				uvOffset));
+	if (emitDataMap_->count == 0) {
+		return;
 	}
+
+	auto commandList = dxCommon_->GetCommandList();
+
+	// パイプラインを射出用に切り替え
+	commandList->SetComputeRootSignature(computeRootSignature.Get());
+	commandList->SetPipelineState(emitComputePipelineState.Get());
+
+	// 定数バッファ(b0)とUAV群(u0, u1)をセット
+	commandList->SetComputeRootConstantBufferView(0, emitDataResource_->GetGPUVirtualAddress());
+	// パーティクル配列のUAV
+	commandList->SetComputeRootDescriptorTable(1, srvManager_->GetGPUDescriptorHandle(group.uavIndex));
+	// カウンター等のUAV
+	commandList->SetComputeRootDescriptorTable(2, srvManager_->GetGPUDescriptorHandle(group.counterUavIndex));
+
+	// GPUに射出命令を出す（64スレッド単位で分割）
+	uint32_t threadGroupsX = (emitDataMap_->count + 63) / 64;
+	commandList->Dispatch(threadGroupsX, 1, 1);
 }
 
 void ParticleManager::CreateParticleGroup(const std::string& groupName, const std::string& directoryPath, const std::string& filename, const std::string textureFilePath, int priority) {
@@ -579,6 +600,7 @@ void ParticleManager::CreateParticleGroup(const std::string& groupName, const st
 	newGroup.material->useNoise = 0; // 初期状態ではノイズなし
 	newGroup.material->uvTransform = MakeIdentity4x4();
 	newGroup.material->burnColor = Vector3(0.0f, 0.0f, 0.0f); // 初期状態では燃えるエフェクトなし
+	newGroup.blendMode = kBlendModeNormal;
 
 	// マテリアルデータにテクスチャファイルパスを設定
 	newGroup.materialData.textureFilePath = textureFilePath;
@@ -655,6 +677,39 @@ void ParticleManager::CreateParticleGroup(const std::string& groupName, const st
 		sizeof(ParticleForGPU)
 	);
 
+	// カウンターバッファ(u1: uint 1個分) の作成
+	D3D12_HEAP_PROPERTIES counterHeapProps{};
+	counterHeapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+	D3D12_RESOURCE_DESC counterResourceDesc{};
+	counterResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	counterResourceDesc.Width = sizeof(uint32_t); // uint1個分
+	counterResourceDesc.Height = 1;
+	counterResourceDesc.DepthOrArraySize = 1;
+	counterResourceDesc.MipLevels = 1;
+	counterResourceDesc.SampleDesc.Count = 1;
+	counterResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	counterResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS; // UAVフラグ
+
+	hr = dxCommon_->GetDevice()->CreateCommittedResource(
+		&counterHeapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&counterResourceDesc,
+		D3D12_RESOURCE_STATE_COMMON,
+		nullptr,
+		IID_PPV_ARGS(&newGroup.counterResource)
+	);
+	assert(SUCCEEDED(hr));
+
+	// カウンター用の UAV を作成
+	newGroup.counterUavIndex = srvManager_->Allocate(1);
+	srvManager_->CreateUAVforStructuredBuffer(
+		newGroup.counterUavIndex,
+		newGroup.counterResource.Get(),
+		1,                 // 要素数は 1 個
+		sizeof(uint32_t)   // 1要素のサイズは uint (4バイト)
+	);
+
 	// マップに登録
 	particleGroups[groupName] = std::move(newGroup);
 }
@@ -685,6 +740,7 @@ void ParticleManager::CreateParticleGroup(const std::string& groupName, const st
 	newGroup.material->useNoise = 0; // 初期状態ではノイズなし
 	newGroup.material->uvTransform = MakeIdentity4x4();
 	newGroup.material->burnColor = Vector3(0.0f, 0.0f, 0.0f); // 初期状態では燃えるエフェクトなし
+	newGroup.blendMode = kBlendModeNormal;
 
 	// マテリアルデータにテクスチャファイルパスを設定
 	newGroup.materialData.textureFilePath = textureFilePath;
@@ -758,6 +814,39 @@ void ParticleManager::CreateParticleGroup(const std::string& groupName, const st
 		newGroup.instancingResource.Get(),
 		kMaxParticleInstance,
 		sizeof(ParticleForGPU)
+	);
+
+	// カウンターバッファ(u1: uint 1個分) の作成
+	D3D12_HEAP_PROPERTIES counterHeapProps{};
+	counterHeapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+	D3D12_RESOURCE_DESC counterResourceDesc{};
+	counterResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	counterResourceDesc.Width = sizeof(uint32_t); // uint1個分
+	counterResourceDesc.Height = 1;
+	counterResourceDesc.DepthOrArraySize = 1;
+	counterResourceDesc.MipLevels = 1;
+	counterResourceDesc.SampleDesc.Count = 1;
+	counterResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	counterResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS; // UAVフラグ
+
+	hr = dxCommon_->GetDevice()->CreateCommittedResource(
+		&counterHeapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&counterResourceDesc,
+		D3D12_RESOURCE_STATE_COMMON,
+		nullptr,
+		IID_PPV_ARGS(&newGroup.counterResource)
+	);
+	assert(SUCCEEDED(hr));
+
+	// カウンター用の UAV を作成
+	newGroup.counterUavIndex = srvManager_->Allocate(1);
+	srvManager_->CreateUAVforStructuredBuffer(
+		newGroup.counterUavIndex,
+		newGroup.counterResource.Get(),
+		1,                 // 要素数は 1 個
+		sizeof(uint32_t)   // 1要素のサイズは uint (4バイト)
 	);
 
 	// マップに登録
@@ -1127,15 +1216,22 @@ void ParticleManager::CreateRootSignature() {
 }
 
 void ParticleManager::CreateComputeRootSignature() {
-	// DescriptorRange作成 (UAV用)
-	D3D12_DESCRIPTOR_RANGE uavRange[1] = {};
-	uavRange[0].BaseShaderRegister = 0; // u0
-	uavRange[0].NumDescriptors = 1;
-	uavRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-	uavRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+	// パーティクルのUAVバッファ (u0)
+	D3D12_DESCRIPTOR_RANGE uavRange0[1] = {};
+	uavRange0[0].BaseShaderRegister = 0; // u0
+	uavRange0[0].NumDescriptors = 1;
+	uavRange0[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+	uavRange0[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	// インデックス用カウンターバッファ等 (u1)
+	D3D12_DESCRIPTOR_RANGE uavRange1[1] = {};
+	uavRange1[0].BaseShaderRegister = 1; // u1
+	uavRange1[0].NumDescriptors = 1;
+	uavRange1[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+	uavRange1[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
 	// RootParameter作成
-	D3D12_ROOT_PARAMETER rootParameters[2] = {};
+	D3D12_ROOT_PARAMETER rootParameters[3] = {};
 
 	// b0: カメラ等のデータ (定数バッファ)
 	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -1145,8 +1241,14 @@ void ParticleManager::CreateComputeRootSignature() {
 	// u0: パーティクルのUAVバッファ (ディスクリプタテーブル)
 	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 	rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-	rootParameters[1].DescriptorTable.pDescriptorRanges = uavRange;
-	rootParameters[1].DescriptorTable.NumDescriptorRanges = _countof(uavRange);
+	rootParameters[1].DescriptorTable.pDescriptorRanges = uavRange0;
+	rootParameters[1].DescriptorTable.NumDescriptorRanges = _countof(uavRange0);
+
+	// [2] u1: インデックス用カウンター等 (ディスクリプタテーブル)
+	rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+	rootParameters[2].DescriptorTable.pDescriptorRanges = uavRange1;
+	rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(uavRange1);
 
 	D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
 	rootSignatureDesc.pParameters = rootParameters;
@@ -1215,5 +1317,15 @@ void ParticleManager::CreateComputePipeline() {
 	computePipelineDesc.CS = { computeShaderBlob->GetBufferPointer(), computeShaderBlob->GetBufferSize() };
 
 	HRESULT hr = dxCommon_->GetDevice()->CreateComputePipelineState(&computePipelineDesc, IID_PPV_ARGS(&computePipelineState));
+	assert(SUCCEEDED(hr));
+
+	// エミッター
+	computeShaderBlob = dxCommon_->CompileShader(L"Resource/shaders/EmitParticle.CS.hlsl", L"cs_6_0");
+	assert(computeShaderBlob != nullptr);
+
+	D3D12_COMPUTE_PIPELINE_STATE_DESC emitPipelineDesc{};
+	emitPipelineDesc.pRootSignature = computeRootSignature.Get(); // ルートシグネチャは共有か新規作成
+	emitPipelineDesc.CS = { computeShaderBlob->GetBufferPointer(), computeShaderBlob->GetBufferSize() };
+	hr = dxCommon_->GetDevice()->CreateComputePipelineState(&emitPipelineDesc, IID_PPV_ARGS(&emitComputePipelineState));
 	assert(SUCCEEDED(hr));
 }

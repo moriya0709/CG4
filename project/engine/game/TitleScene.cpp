@@ -29,39 +29,9 @@ void TitleScene::Initialize() {
 
 	// パーティクル
 
-	// トルネード
-	for (int i = 0; i < kTornadoCount; i++) {
-		tornado[i] = std::make_unique<ParticleEmitter>();
-	}
-	tornado[0]->Initialize("Tornado1", transformParticle, 5, 0.1f);
-	tornado[1]->Initialize("Tornado2", transformParticle, 5, 0.1f);
-	tornado[2]->Initialize("Tornado3", transformParticle, 5, 0.1f);
-	tornado[3]->Initialize("Tornado4", transformParticle, 5, 0.1f);
-	tornado[4]->Initialize("Tornado5", transformParticle, 5, 0.1f);
-	tornado[5]->Initialize("Tornado6", transformParticle, 5, 0.1f);
-	tornado[6]->Initialize("Tornado7", transformParticle, 5, 0.1f);
-	tornado[7]->Initialize("Tornado8", transformParticle, 5, 0.1f);
-	tornado[0]->SetActive("Tornado1");
-	tornado[0]->LoadParticle("Resource/particle/tornado.csv");
-	tornado[1]->SetActive("Tornado2");
-	tornado[1]->LoadParticle("Resource/particle/tornado_2.csv");
-	tornado[2]->SetActive("Tornado3");
-	tornado[2]->LoadParticle("Resource/particle/tornado_3.csv");
-	tornado[3]->SetActive("Tornado4");
-	tornado[3]->LoadParticle("Resource/particle/tornado_4.csv");
-	tornado[4]->SetActive("Tornado5");
-	tornado[4]->LoadParticle("Resource/particle/tornado_5.csv");
-	tornado[5]->SetActive("Tornado6");
-	tornado[5]->LoadParticle("Resource/particle/tornado_6.csv");
-	tornado[6]->SetActive("Tornado7");
-	tornado[6]->LoadParticle("Resource/particle/tornado_7.csv");
-	tornado[7]->SetActive("Tornado8");
-	tornado[7]->LoadParticle("Resource/particle/tornado_8.csv");
-
 	particleMesh = std::make_unique<ParticleEmitter>();
 	particleMesh->Initialize("obj", transformParticle, 5, 0.1f);
 	particleMesh->SetActive("obj");
-	particleMesh->LoadParticle("Resource/particle/fire.csv");
 
 	// トレイルエフェクト
 	trailEffect->Initialize("Resource/trail/trail.png", transformParticle, 1.0f, 1.5f);

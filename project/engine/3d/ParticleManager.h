@@ -28,19 +28,22 @@ struct Particle {
 	Vector3 velocity;
 	Vector4 color;
 	Vector4 startColor;
+	Vector4 finalColor;
 	float lifeTime;
 	float currentTime;
 	Matrix4x4 wvp;
 	Matrix4x4 world;
 	float emissive;
-	Vector4 finalColor;
 	float colorChangeSpeed;
+	bool isRandVelocity[3];
 	bool isColorChange[4];
 	bool isScaleChange[3];
 	float scaleAdd;
 	Vector2 uvScale;
 	Vector2 uvOffset;       // ★追加: 現在のUVのズレ（移動量）
 	Vector2 uvScrollSpeed;  // ★追加: 1秒間に進むUVスクロールの速さ
+	int32_t useNoise;
+	Vector3 burnColor;
 };
 // 場(加速度)
 struct AccelerationField {
@@ -53,33 +56,39 @@ struct ParticleForGPU {
 	Matrix4x4 WVP;
 	Matrix4x4 World;
 	Vector4 color;
-	Vector2 uvScale;
-	Vector2 uvOffset;
+	Vector2 uvScale;	// UVスケール
+	Vector2 uvOffset;	// UVオフセット
 
 	// --- 更新計算用パラメータ ---
 	Vector3 translate;
-	float pad1; // アライメント調整
+	float pad1;
 	Vector3 scale;
 	float pad2;
 	Vector3 rotate;
 	float pad3;
 	Vector3 velocity;
 	float pad4;
-	Vector3 isScaleChange;
+	Vector3Int isRandVelocity;	// ランダムに動かすかどうか
 	float pad5;
+	Vector3Int isScaleChange;	// スケール変更するかどうか
+	float pad6;
 
-	Vector4 isColorChange;
+	Vector4Int isColorChange;	// 色変更するかどうか
 	Vector4 startColor;
 	Vector4 finalColor;
 
 	float lifeTime;
 	float currentTime;
 	float colorChangeSpeed;
-	float scaleAdd;
+	float scaleAdd;			// スケール変更量
 	
-	float emissive;
-	Vector2 uvScrollSpeed;
+	float emissive;			// エミッシブ
+	Vector2 uvScrollSpeed;	// UVスクロール速度
 	int32_t isActive; // 0: 死んでいる, 1: 生きている
+
+	int32_t useNoise;		// 0:通常 1:ノイズテクスチャ 2:両方
+	Vector3 burnColor;		// ふちの色
+
 };
 
 // カメラ情報等をCSに送るための定数バッファ
@@ -109,6 +118,8 @@ struct CPUParticleControl {
 	float currentTime = 0.0f;
 	float lifeTime = 0.0f;
 };
+
+
 
 class ParticleManager {
 public:
@@ -146,6 +157,10 @@ public:
 
 		// 生存時間
 		std::vector<CPUParticleControl> cpuControls;
+
+		// カウンター用(u1)のリソースとUAVインデックス
+		Microsoft::WRL::ComPtr<ID3D12Resource> counterResource;
+		uint32_t counterUavIndex = 0;
 	};
 	std::unordered_map<std::string, ParticleGroup> particleGroups;
 
@@ -185,21 +200,8 @@ public:
 
 	// パーティクルの発生
 	void Emit(const std::string& name,
-		const Vector3& position,
-		const Vector3& scale,
-		const Vector3& rotate,
-		uint32_t count,
-		std::uniform_real_distribution<float> distPosition,
-		std::uniform_real_distribution<float>distScale,
-		std::uniform_real_distribution<float>distRotate,
-		std::uniform_real_distribution<float> distVelocity,
-		std::uniform_real_distribution<float> distTime,
-		bool isRandPosition[3], bool isRandScale[3],
-		bool isRandRotate[3], bool isRandVelocity[3], Vector4 color,
-		float emissive, BlendMode blendMode, Vector4 finalColor,
-		float colorChangeSpeed, bool isColorChange[4], bool isScaleChange[3], 
-		float scaleAdd, Vector2 uvScale, Vector2 uvScrollSpeed,
-		Vector2 uvOffset, int32_t useNoise, Vector3 burnColor
+		Emitter* emitter,
+		BlendMode blendMode
 	);
 
 	// OBJファイルからグループを作成
@@ -243,6 +245,7 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineStates[kCountOfBlendMode];
 	// コンピュートパイプライン
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> computePipelineState = nullptr;
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> emitComputePipelineState = nullptr;
 
 	// Objファイルのデータ
 	ModelData modelData;
@@ -252,12 +255,14 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource> materialResource;
 	Microsoft::WRL::ComPtr<ID3D12Resource> commonDataResource_;
 	Microsoft::WRL::ComPtr<ID3D12Resource> cameraDataResource_;
+	Microsoft::WRL::ComPtr<ID3D12Resource> emitDataResource_;
 
 	// バッファリソース内のデータを指すポインタ
 	VertexData* vertexData = nullptr;
 	Material* materialData = nullptr;
 	ParticleCommonData* commonDataMap_ = nullptr;
 	ParticleCameraData* cameraDataMap_ = nullptr;
+	Emitter* emitDataMap_ = nullptr;
 
 	// バッファリソースの使い道を補足するバッファビュー
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView;

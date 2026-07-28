@@ -52,27 +52,39 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     // 3. 移動
-    gParticles[index].translate += gParticles[index].velocity * gDeltaTime;
+    if (gParticles[index].isRandVelocity.x != 0)
+    {
+        gParticles[index].translate.x += gParticles[index].velocity.x * gDeltaTime;
+    }
+    if (gParticles[index].isRandVelocity.y != 0)
+    {
+        gParticles[index].translate.y += gParticles[index].velocity.y * gDeltaTime;
+    }
+    if (gParticles[index].isRandVelocity.z != 0)
+    {
+        gParticles[index].translate.z += gParticles[index].velocity.z * gDeltaTime;
+    }
 
+    
     // 4. 色変化
     float progress = (gParticles[index].currentTime / gParticles[index].lifeTime) * gParticles[index].colorChangeSpeed;
     progress = saturate(progress); // 0.0f 〜 1.0f にクランプ
 
     if (gParticles[index].isColorChange.x != 0)
     {
-        gParticles[index].color.x = lerp(gParticles[index].startColor.x, gParticles[index].finalColor.x, progress);
+        gParticles[index].color.x = lerp(gParticles[index].color.x, gParticles[index].finalColor.x, progress);
     }
     if (gParticles[index].isColorChange.y != 0)
     {
-        gParticles[index].color.y = lerp(gParticles[index].startColor.y, gParticles[index].finalColor.y, progress);
+        gParticles[index].color.y = lerp(gParticles[index].color.y, gParticles[index].finalColor.y, progress);
     }
     if (gParticles[index].isColorChange.z != 0)
     {
-        gParticles[index].color.z = lerp(gParticles[index].startColor.z, gParticles[index].finalColor.z, progress);
+        gParticles[index].color.z = lerp(gParticles[index].color.z, gParticles[index].finalColor.z, progress);
     }
     if (gParticles[index].isColorChange.w != 0)
     {
-        gParticles[index].color.w = lerp(gParticles[index].startColor.w, gParticles[index].finalColor.w, progress);
+        gParticles[index].color.w = lerp(gParticles[index].color.w, gParticles[index].finalColor.w, progress);
     }
 
     // 5. サイズ変化

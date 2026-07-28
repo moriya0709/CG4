@@ -6,14 +6,7 @@
 
 #include "Calc.h"
 #include "Blend.h"
-
-struct Emitter {
-	Transform transform; //!< エミッタのTransform
-	uint32_t count; //!< 発生数
-	float frequency; //!< 発生頻度
-	float frequencyTime; //!< 頻度用時刻
-	std::string name; //!< エミッタ名
-};
+#include "CommonStructs.h"
 
 class ParticleEmitter {
 public:
@@ -36,11 +29,11 @@ public:
 	void Editor();
 
 	// setter
-	void SetTranslate(Vector3 translate) { emitter.transform.translate = translate; }
+	void SetTranslate(Vector3 translate) { emitter->translate = translate; }
 
 private:
 	// パーティクルエミッタの設定
-	Emitter emitter;
+	std::unique_ptr<Emitter> emitter;
 	// パーティクル共通データ
 	std::uniform_real_distribution<float> distPosition; // ランダムな座標範囲
 	std::uniform_real_distribution<float> distScale; // ランダムなスケール範囲
@@ -65,6 +58,7 @@ private:
 	Vector3 burnColor = { 1.0f, 0.25f, 0.0f }; // ふちの色
 
 	char fileName[20]; //パーティクルのファイル名
+	std::string name; //!< エミッタ名
 
 
 	// デルタタイム(60fps固定)
@@ -73,6 +67,6 @@ private:
 	// エミッシブ
 	float emissive = 10.0f;
 	// ブレンドモード
-	BlendMode blendMode = kBlendModeNormal;
+	BlendMode blendMode;
 
 };
