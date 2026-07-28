@@ -29,8 +29,21 @@ VertexShaderOutput main(VSInput input, uint instanceId : SV_InstanceID)
         0, 0, 0, 1
     };
 
-    // 回転行列（ビルボード行列を適用）
-    matrix rotateMatrix = billboardMatrix;
+
+    float c = cos(p.rotate.z);
+    float s = sin(p.rotate.z);
+
+    // Z軸回転行列
+    matrix particleRotZ =
+    {
+        c, s, 0, 0,
+       -s, c, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1
+    };
+
+    // 回転行列
+    matrix rotateMatrix = mul(particleRotZ, billboardMatrix);
 
     // 平行移動行列
     matrix translateMatrix =
@@ -59,6 +72,10 @@ VertexShaderOutput main(VSInput input, uint instanceId : SV_InstanceID)
 
     // 3. normal (NORMAL0) : パーティクルなので適当な正面方向を入れておく
     output.normal = float3(0.0f, 0.0f, -1.0f);
+    
+    // ★ 追加：ノイズ設定とふちの色をPSへリレーする
+    output.useNoise = p.useNoise;
+    output.burnColor = p.burnColor;
 
     // =========================================================
 

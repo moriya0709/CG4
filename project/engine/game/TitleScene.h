@@ -143,8 +143,6 @@ private:
 	// 3Dオブジェクト
 	std::unique_ptr <Object> object = nullptr;
 	// パーティクルエミッタ
-	std::unique_ptr <ParticleEmitter> tornado[8] = {};
-	const int kTornadoCount = 8;
 	std::unique_ptr <ParticleEmitter> particleMesh = nullptr;
 	// トレイルエフェクト
 	std::shared_ptr<TrailEffect> trailEffect = std::make_shared<TrailEffect>();

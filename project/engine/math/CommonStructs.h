@@ -130,3 +130,54 @@ struct SkinCluster {
     std::span<WellForGPU> mappedPalette;
     std::pair<D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> paletteSrvHandle;
 };
+
+struct Emitter {
+    Vector4 color;
+    Vector2 uvScale;	// UVスケール
+    Vector2 uvOffset;	// UVオフセット
+
+    // --- 更新計算用パラメータ ---
+    Vector3 translate;
+    float pad1;
+    Vector3 scale;
+    float pad2;
+    Vector3 rotate;
+    float pad3;
+    Vector3Int isRandPosition;	// ランダムな座標にするかどうか
+    float pad5;
+    Vector3Int isRandScale;	// ランダムなスケールにするかどうか
+    float pad6;
+    Vector3Int isRandRotate;	// ランダムな回転にするかどうか
+    float pad7;
+    Vector3Int isRandVelocity;	// ランダムに動かすかどうか
+    float pad8;
+    Vector3Int isScaleChange;	// スケール変更するかどうか
+    float pad9;
+
+    Vector4Int isColorChange;	// 色変更するかどうか
+    Vector4 finalColor;
+
+    float lifeTime;
+    float currentTime;
+    float colorChangeSpeed;
+    float scaleAdd;			// スケール変更量
+
+    float emissive;			// エミッシブ
+    Vector2 uvScrollSpeed;	// UVスクロール速度
+    int pad10;
+
+    int32_t useNoise;		// 0:通常 1:ノイズテクスチャ 2:両方
+    Vector3 burnColor;		// ふちの色
+
+    uint32_t count; //!< 発生数
+    float frequency; //!< 発生頻度
+    float frequencyTime; //!< 頻度用時刻
+    int pad11;
+
+    Vector2 randPosition;
+    Vector2 randScale;
+    Vector2 randRotate;
+    Vector2 randVelocity;
+
+};
+

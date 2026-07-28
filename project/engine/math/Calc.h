@@ -30,6 +30,17 @@ struct Vector2Int final {
     int x;
     int y;
 };
+struct Vector3Int final {
+    int x;
+    int y;
+    int z;
+};
+struct Vector4Int final {
+    int x;
+    int y;
+    int z;
+    int w;
+};
 
 struct Quaternion {
 	float x;

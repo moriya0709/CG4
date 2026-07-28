@@ -94,7 +94,7 @@ void Game::Initialize() {
 	sceneFactory_ = std::make_unique<SceneFactory>();
 	SceneManager::GetInstance()->SetSceneFactory(move(sceneFactory_));
 	// シーンマネージャーに最初のシーンをセット
-	SceneManager::GetInstance()->ChangeScene("GAMEPLAY");
+	SceneManager::GetInstance()->ChangeScene("TITLE");
 
 	Skybox::GetInstance()->Initialize(dxCommon, "Resource/rostock_laage_airport_4k.dds");
 	
