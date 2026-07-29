@@ -56,7 +56,9 @@ cbuffer EmitData : register(b0)
 // パーティクル本体のバッファ
 RWStructuredBuffer<Particle> gParticles : register(u0);
 // インデックス管理用のカウンターバッファ (サイズ: 1のuint)
-RWStructuredBuffer<uint> gCounter : register(u1);
+RWStructuredBuffer<uint> gFreeListIndex : register(u1);
+// FreeList本体(空いているパーティクルのインデックス配列)
+RWStructuredBuffer<uint> gFreeList : register(u2);
 
 // 簡易的なGPU乱数生成関数（シード値にスレッドID等を利用）
 float Random(float2 seed)
@@ -71,13 +73,21 @@ void main(uint3 DTid : SV_DispatchThreadID)
     if (id >= count)
         return;
 
-    // InterlockedAddで安全にインデックスを取得（リングバッファ的に上書き）
-    uint particleIndex;
-    InterlockedAdd(gCounter[0], 1, particleIndex);
+
+    uint currentFreeCount;
+    // 空き数を1減らし、減らす前の空き数を取得する
+    InterlockedAdd(gFreeListIndex[0], -1, currentFreeCount);
     
-    // 最大パーティクル数で剰余を取り、バッファ外アクセスを防ぐ
-    // ※ MAX_PARTICLES は定数バッファ等で渡すかマクロで定義
-    particleIndex = particleIndex % 1024;
+    // 空きがなかった場合（0以下になった場合）の安全対策
+    if (currentFreeCount == 0)
+    {
+        // 減らしすぎた分を元に戻して処理を終了する
+        InterlockedAdd(gFreeListIndex[0], 1);
+        return;
+    }
+    
+    // FreeListから実際のパーティクルインデックスを取得
+    uint particleIndex = gFreeList[currentFreeCount - 1];
 
     // *ランダム座標* //
     

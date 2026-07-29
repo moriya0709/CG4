@@ -133,7 +133,7 @@ void ParticleManager::Update() {
 	auto commandList = dxCommon_->GetCommandList();
 
 	// ディスクリプタヒープをコマンドリストにセットする
-	ID3D12DescriptorHeap* descriptorHeaps[] = { dxCommon_->GetSrvHeap()};
+	ID3D12DescriptorHeap* descriptorHeaps[] = { dxCommon_->GetSrvHeap() };
 	commandList->SetDescriptorHeaps(1, descriptorHeaps);
 
 	// CS用のパイプラインとルートシグネチャをセット
@@ -144,121 +144,43 @@ void ParticleManager::Update() {
 	for (auto& groupPair : particleGroups) {
 		ParticleGroup& group = groupPair.second;
 
-		// 念のためCPU管理配列のサイズチェック
-		if (group.cpuControls.size() < kMaxParticleInstance) {
-			group.cpuControls.resize(kMaxParticleInstance);
-		}
+		// =========================================================
+		// CPUでの状態管理(cpuControls)や個別のリソース転送処理は廃止
+		// =========================================================
 
 		// =========================================================
-		// 1. CPU側で「どのスロットが空いたか」を把握するためだけにタイマーを進める
-		// （※ここではまだGPUのバッファは触りません）
-		// =========================================================
-		for (uint32_t i = 0; i < kMaxParticleInstance; ++i) {
-			if (group.cpuControls[i].isActive) {
-				group.cpuControls[i].currentTime += kDeltaTime;
-				if (group.cpuControls[i].currentTime >= group.cpuControls[i].lifeTime) {
-					group.cpuControls[i].isActive = false; // CPU側で空き部屋にする
-				}
-			}
-		}
-
-		// =========================================================
-		// 2. リソースバリア: DEFAULTバッファを コピー先(COPY_DEST) に遷移
+		// 1. リソースバリア: 描画用(SRV)等から コンピュートシェーダ用(UAV) へ遷移
 		// =========================================================
 		D3D12_RESOURCE_BARRIER barrier{};
 		barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 		barrier.Transition.pResource = group.instancingResource.Get();
+		// ※ 初回以外は直前の描画等でGENERIC_READになっている想定
 		barrier.Transition.StateBefore = group.isFirstUpdate ? D3D12_RESOURCE_STATE_COMMON : D3D12_RESOURCE_STATE_GENERIC_READ;
-		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
-		commandList->ResourceBarrier(1, &barrier);
-
-		// =========================================================
-		// 3. 新しく生まれたパーティクルのみ、空き部屋へ「ピンポイント」で転送する
-		// =========================================================
-		for (const auto& particle : group.particles) {
-			// CPUの管理データから空いているインデックスを探す
-			int freeIndex = -1;
-			for (uint32_t i = 0; i < kMaxParticleInstance; ++i) {
-				if (!group.cpuControls[i].isActive) {
-					freeIndex = i;
-					break;
-				}
-			}
-
-			if (freeIndex == -1) break; // 満杯なら生成スキップ
-
-			// CPU側の管理状態を更新
-			group.cpuControls[freeIndex].isActive = true;
-			group.cpuControls[freeIndex].currentTime = 0.0f;
-			group.cpuControls[freeIndex].lifeTime = particle.lifeTime;
-
-			// UPLOADバッファの「該当インデックスの部屋」にのみ初期データを書き込む
-			group.instancingData[freeIndex].translate = particle.transform.translate;
-			group.instancingData[freeIndex].scale = particle.transform.scale;
-			group.instancingData[freeIndex].rotate = particle.transform.rotate;
-			group.instancingData[freeIndex].velocity = particle.velocity;
-			group.instancingData[freeIndex].color = particle.color;
-			group.instancingData[freeIndex].startColor = particle.startColor;
-			group.instancingData[freeIndex].finalColor = particle.finalColor;
-			group.instancingData[freeIndex].lifeTime = particle.lifeTime;
-			group.instancingData[freeIndex].currentTime = 0.0f;
-			group.instancingData[freeIndex].colorChangeSpeed = particle.colorChangeSpeed;
-			group.instancingData[freeIndex].scaleAdd = particle.scaleAdd;
-			group.instancingData[freeIndex].emissive = particle.emissive;
-			group.instancingData[freeIndex].uvScale = particle.uvScale;
-			group.instancingData[freeIndex].uvOffset = particle.uvOffset;
-			group.instancingData[freeIndex].uvScrollSpeed = particle.uvScrollSpeed;
-
-			group.instancingData[freeIndex].isColorChange = {
-				particle.isColorChange[0] ? 1 : 0,
-				particle.isColorChange[1] ? 1 : 0,
-				particle.isColorChange[2] ? 1 : 0,
-				particle.isColorChange[3] ? 1 : 0
-			};
-			group.instancingData[freeIndex].isScaleChange = {
-				particle.isScaleChange[0] ? 1 : 0,
-				particle.isScaleChange[1] ? 1 : 0,
-				particle.isScaleChange[2] ? 1 : 0
-			};
-
-			// 行列は初期化状態（※後述の注意点を参照）
-			group.instancingData[freeIndex].World = MakeIdentity4x4();
-			group.instancingData[freeIndex].WVP = MakeIdentity4x4();
-			group.instancingData[freeIndex].isActive = 1;
-
-			// ★【修正のキモ】丸ごとCopyResourceするのをやめ、この1件分だけをDEFAULTバッファへピンポイントコピー！
-			// これにより、現在GPU側で動いている他のパーティクルのデータが破壊されなくなります。
-			UINT64 offset = freeIndex * sizeof(group.instancingData[0]); // 構造体1個分のバイトオフセット
-			commandList->CopyBufferRegion(
-				group.instancingResource.Get(), offset,
-				group.instancingUploadResource.Get(), offset,
-				sizeof(group.instancingData[0])
-			);
-		}
-
-		// 生成用の一次リストはクリア
-		group.particles.clear();
-
-		// =========================================================
-		// 4. リソースバリア: コピー先(COPY_DEST) から CS用(UAV) へ遷移
-		// =========================================================
-		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
 		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 		commandList->ResourceBarrier(1, &barrier);
 
 		group.isFirstUpdate = false;
 
 		// ---------------------------------------------------------
-		// 5. UAVを DescriptorTable にセット & CSのDispatch
+		// 2. UAVを DescriptorTable にセット & CSのDispatch
 		// ---------------------------------------------------------
+		// [1] u0: パーティクル本体 (gParticles)
 		commandList->SetComputeRootDescriptorTable(1, srvManager_->GetGPUDescriptorHandle(group.uavIndex));
 
-		// 【修正3】最大数に応じた正しいスレッドグループ数を計算してDispatch（1024個単位）
+		// [2] u1: FreeListのインデックスカウンタ (gFreeListIndex)
+		// ※ 事前にSrvManagerへ登録した際のインデックスを指定してください
+		commandList->SetComputeRootDescriptorTable(2, srvManager_->GetGPUDescriptorHandle(group.counterUavIndex));
+
+		// [3] u2: FreeList本体の配列 (gFreeList)
+		// ※ 事前にSrvManagerへ登録した際のインデックスを指定してください
+		commandList->SetComputeRootDescriptorTable(3, srvManager_->GetGPUDescriptorHandle(group.freeListUavIndex));
+
+		// 最大数に応じた正しいスレッドグループ数を計算してDispatch（1024個単位）
 		uint32_t threadGroupsX = (kMaxParticleInstance + 1023) / 1024;
 		commandList->Dispatch(threadGroupsX, 1, 1);
 
 		// ---------------------------------------------------------
-		// 6. リソースバリア: 書き込み(UAV) -> 描画用読み込み(SRV) へ遷移
+		// 3. リソースバリア: 書き込み(UAV) -> 描画用読み込み(SRV) へ遷移
 		// ---------------------------------------------------------
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_GENERIC_READ;
@@ -567,6 +489,8 @@ void ParticleManager::Emit(
 	commandList->SetComputeRootDescriptorTable(1, srvManager_->GetGPUDescriptorHandle(group.uavIndex));
 	// カウンター等のUAV
 	commandList->SetComputeRootDescriptorTable(2, srvManager_->GetGPUDescriptorHandle(group.counterUavIndex));
+	// FreeList本体のUAV
+	commandList->SetComputeRootDescriptorTable(3, srvManager_->GetGPUDescriptorHandle(group.freeListUavIndex));
 
 	// GPUに射出命令を出す（64スレッド単位で分割）
 	uint32_t threadGroupsX = (emitDataMap_->count + 63) / 64;
@@ -710,6 +634,99 @@ void ParticleManager::CreateParticleGroup(const std::string& groupName, const st
 		sizeof(uint32_t)   // 1要素のサイズは uint (4バイト)
 	);
 
+	// FreeList本体バッファ(u2: uint配列) の作成を追加
+	D3D12_RESOURCE_DESC freeListResourceDesc = counterResourceDesc;
+	freeListResourceDesc.Width = sizeof(uint32_t) * kMaxParticleInstance; // 最大数分の配列
+
+	hr = dxCommon_->GetDevice()->CreateCommittedResource(
+		&counterHeapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&freeListResourceDesc,
+		D3D12_RESOURCE_STATE_COMMON,
+		nullptr,
+		IID_PPV_ARGS(&newGroup.freeListResource)
+	);
+	assert(SUCCEEDED(hr));
+
+	// FreeList用の UAV を作成
+	newGroup.freeListUavIndex = srvManager_->Allocate(1);
+	srvManager_->CreateUAVforStructuredBuffer(
+		newGroup.freeListUavIndex,
+		newGroup.freeListResource.Get(),
+		kMaxParticleInstance, // 要素数は最大パーティクル数
+		sizeof(uint32_t)
+	);
+
+	// --- ここから追加：FreeListとカウンターの安全な初期化処理 ---
+
+	// 1. カウンターの初期化 (最大パーティクル数をセット)
+	uint32_t initialCounter = kMaxParticleInstance;
+
+	// 2. FreeListの初期化 (0 ～ kMaxParticleInstance - 1 のインデックスをセット)
+	std::vector<uint32_t> initialFreeList(kMaxParticleInstance);
+	for (uint32_t i = 0; i < kMaxParticleInstance; ++i) {
+		initialFreeList[i] = i;
+	}
+
+	// 3. Uploadヒープを作成 (カウンター用メンバ変数へ)
+	uploadHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+	D3D12_RESOURCE_DESC counterUploadDesc = counterResourceDesc;
+	counterUploadDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+	hr = dxCommon_->GetDevice()->CreateCommittedResource(
+		&uploadHeapProps, D3D12_HEAP_FLAG_NONE, &counterUploadDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&newGroup.counterUploadResource)
+	);
+	assert(SUCCEEDED(hr));
+
+	uint32_t* pCounterData = nullptr;
+	newGroup.counterUploadResource->Map(0, nullptr, reinterpret_cast<void**>(&pCounterData));
+	*pCounterData = initialCounter;
+	newGroup.counterUploadResource->Unmap(0, nullptr);
+
+	// 4. Uploadヒープを作成 (FreeList用メンバ変数へ)
+	D3D12_RESOURCE_DESC freeListUploadDesc = freeListResourceDesc;
+	freeListUploadDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+	hr = dxCommon_->GetDevice()->CreateCommittedResource(
+		&uploadHeapProps, D3D12_HEAP_FLAG_NONE, &freeListUploadDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&newGroup.freeListUploadResource)
+	);
+	assert(SUCCEEDED(hr));
+
+	uint32_t* pFreeListData = nullptr;
+	newGroup.freeListUploadResource->Map(0, nullptr, reinterpret_cast<void**>(&pFreeListData));
+	std::memcpy(pFreeListData, initialFreeList.data(), sizeof(uint32_t) * kMaxParticleInstance);
+	newGroup.freeListUploadResource->Unmap(0, nullptr);
+
+	// 5. コマンドリストを使って Defaultヒープへコピー
+	auto commandList = dxCommon_->GetCommandList();
+
+	D3D12_RESOURCE_BARRIER barriers[2] = {};
+	barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	barriers[0].Transition.pResource = newGroup.counterResource.Get();
+	barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+	barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+
+	barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	barriers[1].Transition.pResource = newGroup.freeListResource.Get();
+	barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+	barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+
+	commandList->ResourceBarrier(2, barriers);
+
+	// データ転送 (メンバ変数からコピー)
+	commandList->CopyResource(newGroup.counterResource.Get(), newGroup.counterUploadResource.Get());
+	commandList->CopyResource(newGroup.freeListResource.Get(), newGroup.freeListUploadResource.Get());
+
+	// コピー完了後、UAVとして使えるように状態を遷移
+	barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+	barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+	barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+	barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+	commandList->ResourceBarrier(2, barriers);
+	// --- 追加ここまで ---
+
 	// マップに登録
 	particleGroups[groupName] = std::move(newGroup);
 }
@@ -848,6 +865,99 @@ void ParticleManager::CreateParticleGroup(const std::string& groupName, const st
 		1,                 // 要素数は 1 個
 		sizeof(uint32_t)   // 1要素のサイズは uint (4バイト)
 	);
+
+	// FreeList本体バッファ(u2: uint配列) の作成を追加
+	D3D12_RESOURCE_DESC freeListResourceDesc = counterResourceDesc;
+	freeListResourceDesc.Width = sizeof(uint32_t) * kMaxParticleInstance; // 最大数分の配列
+
+	hr = dxCommon_->GetDevice()->CreateCommittedResource(
+		&counterHeapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&freeListResourceDesc,
+		D3D12_RESOURCE_STATE_COMMON,
+		nullptr,
+		IID_PPV_ARGS(&newGroup.freeListResource)
+	);
+	assert(SUCCEEDED(hr));
+
+	// FreeList用の UAV を作成
+	newGroup.freeListUavIndex = srvManager_->Allocate(1);
+	srvManager_->CreateUAVforStructuredBuffer(
+		newGroup.freeListUavIndex,
+		newGroup.freeListResource.Get(),
+		kMaxParticleInstance, // 要素数は最大パーティクル数
+		sizeof(uint32_t)
+	);
+
+	// --- ここから追加：FreeListとカウンターの安全な初期化処理 ---
+
+	// 1. カウンターの初期化 (最大パーティクル数をセット)
+	uint32_t initialCounter = kMaxParticleInstance;
+
+	// 2. FreeListの初期化 (0 ～ kMaxParticleInstance - 1 のインデックスをセット)
+	std::vector<uint32_t> initialFreeList(kMaxParticleInstance);
+	for (uint32_t i = 0; i < kMaxParticleInstance; ++i) {
+		initialFreeList[i] = i;
+	}
+
+	// 3. Uploadヒープを作成 (カウンター用メンバ変数へ)
+	uploadHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+	D3D12_RESOURCE_DESC counterUploadDesc = counterResourceDesc;
+	counterUploadDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+	hr = dxCommon_->GetDevice()->CreateCommittedResource(
+		&uploadHeapProps, D3D12_HEAP_FLAG_NONE, &counterUploadDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&newGroup.counterUploadResource)
+	);
+	assert(SUCCEEDED(hr));
+
+	uint32_t* pCounterData = nullptr;
+	newGroup.counterUploadResource->Map(0, nullptr, reinterpret_cast<void**>(&pCounterData));
+	*pCounterData = initialCounter;
+	newGroup.counterUploadResource->Unmap(0, nullptr);
+
+	// 4. Uploadヒープを作成 (FreeList用メンバ変数へ)
+	D3D12_RESOURCE_DESC freeListUploadDesc = freeListResourceDesc;
+	freeListUploadDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+	hr = dxCommon_->GetDevice()->CreateCommittedResource(
+		&uploadHeapProps, D3D12_HEAP_FLAG_NONE, &freeListUploadDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&newGroup.freeListUploadResource)
+	);
+	assert(SUCCEEDED(hr));
+
+	uint32_t* pFreeListData = nullptr;
+	newGroup.freeListUploadResource->Map(0, nullptr, reinterpret_cast<void**>(&pFreeListData));
+	std::memcpy(pFreeListData, initialFreeList.data(), sizeof(uint32_t) * kMaxParticleInstance);
+	newGroup.freeListUploadResource->Unmap(0, nullptr);
+
+	// 5. コマンドリストを使って Defaultヒープへコピー
+	auto commandList = dxCommon_->GetCommandList();
+
+	D3D12_RESOURCE_BARRIER barriers[2] = {};
+	barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	barriers[0].Transition.pResource = newGroup.counterResource.Get();
+	barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+	barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+
+	barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	barriers[1].Transition.pResource = newGroup.freeListResource.Get();
+	barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+	barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+
+	commandList->ResourceBarrier(2, barriers);
+
+	// データ転送 (メンバ変数からコピー)
+	commandList->CopyResource(newGroup.counterResource.Get(), newGroup.counterUploadResource.Get());
+	commandList->CopyResource(newGroup.freeListResource.Get(), newGroup.freeListUploadResource.Get());
+
+	// コピー完了後、UAVとして使えるように状態を遷移
+	barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+	barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+	barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+	barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+	commandList->ResourceBarrier(2, barriers);
+	// --- 追加ここまで ---
 
 	// マップに登録
 	particleGroups[groupName] = std::move(newGroup);
@@ -1230,8 +1340,15 @@ void ParticleManager::CreateComputeRootSignature() {
 	uavRange1[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
 	uavRange1[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
+	// FreeList本体のUAVバッファ (u2)
+	D3D12_DESCRIPTOR_RANGE uavRange2[1] = {};
+	uavRange2[0].BaseShaderRegister = 2; // u2
+	uavRange2[0].NumDescriptors = 1;
+	uavRange2[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+	uavRange2[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
 	// RootParameter作成
-	D3D12_ROOT_PARAMETER rootParameters[3] = {};
+	D3D12_ROOT_PARAMETER rootParameters[4] = {};
 
 	// b0: カメラ等のデータ (定数バッファ)
 	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -1249,6 +1366,12 @@ void ParticleManager::CreateComputeRootSignature() {
 	rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 	rootParameters[2].DescriptorTable.pDescriptorRanges = uavRange1;
 	rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(uavRange1);
+
+	// [3] u2: FreeList本体 (ディスクリプタテーブル)
+	rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+	rootParameters[3].DescriptorTable.pDescriptorRanges = uavRange2;
+	rootParameters[3].DescriptorTable.NumDescriptorRanges = _countof(uavRange2);
 
 	D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
 	rootSignatureDesc.pParameters = rootParameters;
