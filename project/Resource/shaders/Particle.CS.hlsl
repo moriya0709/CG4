@@ -19,6 +19,10 @@ cbuffer CommonData : register(b0)
 };
 
 RWStructuredBuffer<Particle> gParticles : register(u0);
+// インデックス管理用のカウンターバッファ
+RWStructuredBuffer<uint> gFreeListIndex : register(u1);
+// FreeList本体
+RWStructuredBuffer<uint> gFreeList : register(u2);
 
 [numthreads(1024, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
@@ -32,10 +36,23 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
 
     // 1. 寿命による消滅判定
+    // 現在の時間は gParticles[index].currentTime、寿命は gParticles[index].lifeTime を参照しています[cite: 6]
     if (gParticles[index].currentTime >= gParticles[index].lifeTime)
     {
         gParticles[index].isActive = 0;
-        gParticles[index].scale = float3(0.0f, 0.0f, 0.0f); // 描画サイズを0にする
+        gParticles[index].scale = float3(0.0f, 0.0f, 0.0f); // 描画サイズを0にする[cite: 6]
+        
+        // --- 追加部分: FreeListへの返却 (Push) ---
+        uint freeListIndex;
+        // カウンタを1増やし、増やす前の値（次に書き込むべき配列要素のインデックス）を取得する
+        InterlockedAdd(gFreeListIndex[0], 1, freeListIndex);
+        
+        // 最大パーティクル数 (gMaxParticles) を超えない範囲で安全に書き込む[cite: 6]
+        if (freeListIndex < gMaxParticles)
+        {
+            gFreeList[freeListIndex] = index; // 自身のインデックスを空きリストに登録
+        }
+        
         return;
     }
 

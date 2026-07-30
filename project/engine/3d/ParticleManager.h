@@ -161,6 +161,15 @@ public:
 		// カウンター用(u1)のリソースとUAVインデックス
 		Microsoft::WRL::ComPtr<ID3D12Resource> counterResource;
 		uint32_t counterUavIndex = 0;
+
+		// FreeList本体バッファ
+		Microsoft::WRL::ComPtr<ID3D12Resource> freeListResource;
+		uint32_t freeListIndexUavIndex = 0;
+		uint32_t freeListUavIndex = 0;
+
+		Microsoft::WRL::ComPtr<ID3D12Resource> counterUploadResource;
+		Microsoft::WRL::ComPtr<ID3D12Resource> freeListUploadResource;
+
 	};
 	std::unordered_map<std::string, ParticleGroup> particleGroups;
 

@@ -179,5 +179,8 @@ struct Emitter {
     Vector2 randRotate;
     Vector2 randVelocity;
 
+    Vector2 randLifeTime;
+    Vector2 pad12;
+
 };
 

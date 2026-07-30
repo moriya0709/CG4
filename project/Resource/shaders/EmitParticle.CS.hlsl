@@ -51,12 +51,17 @@ cbuffer EmitData : register(b0)
     float2 randRotate;
     float2 randVelocity;
     
+    float2 randLifeTime;
+    float2 pad12;
+    
 };
 
 // パーティクル本体のバッファ
 RWStructuredBuffer<Particle> gParticles : register(u0);
 // インデックス管理用のカウンターバッファ (サイズ: 1のuint)
-RWStructuredBuffer<uint> gCounter : register(u1);
+RWStructuredBuffer<uint> gFreeListIndex : register(u1);
+// FreeList本体(空いているパーティクルのインデックス配列)
+RWStructuredBuffer<uint> gFreeList : register(u2);
 
 // 簡易的なGPU乱数生成関数（シード値にスレッドID等を利用）
 float Random(float2 seed)
@@ -71,13 +76,21 @@ void main(uint3 DTid : SV_DispatchThreadID)
     if (id >= count)
         return;
 
-    // InterlockedAddで安全にインデックスを取得（リングバッファ的に上書き）
-    uint particleIndex;
-    InterlockedAdd(gCounter[0], 1, particleIndex);
+
+    uint currentFreeCount;
+    // 空き数を1減らし、減らす前の空き数を取得する
+    InterlockedAdd(gFreeListIndex[0], -1, currentFreeCount);
     
-    // 最大パーティクル数で剰余を取り、バッファ外アクセスを防ぐ
-    // ※ MAX_PARTICLES は定数バッファ等で渡すかマクロで定義
-    particleIndex = particleIndex % 1024;
+    // 空きがなかった場合（0以下になった場合）の安全対策
+    if (currentFreeCount == 0)
+    {
+        // 減らしすぎた分を元に戻して処理を終了する
+        InterlockedAdd(gFreeListIndex[0], 1);
+        return;
+    }
+    
+    // FreeListから実際のパーティクルインデックスを取得
+    uint particleIndex = gFreeList[currentFreeCount - 1];
 
     // *ランダム座標* //
     
@@ -96,7 +109,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     randomSeed = float2(particleIndex + 10.0f, scale.x);
     // 1. まず 0.0 ~ 1.0 の乱数を作る
     rawRandom = float3(Random(randomSeed), Random(randomSeed + 1.0), Random(randomSeed + 2.0));
-    // 2. lerpを使って、-10.0 と 10.0 の間で変換する
+    // xとyの間で変換する
     minVal = float3(randScale.x, randScale.x, randScale.x);
     maxVal = float3(randScale.y, randScale.y, randScale.y);
     float3 randomScale = lerp(minVal, maxVal, rawRandom);
@@ -107,7 +120,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     randomSeed = float2(particleIndex + 20.0f, rotate.x);
     // 1. まず 0.0 ~ 1.0 の乱数を作る
     rawRandom = float3(Random(randomSeed), Random(randomSeed + 1.0), Random(randomSeed + 2.0));
-    // 2. lerpを使って、-10.0 と 10.0 の間で変換する
+    // xとyの間で変換する
     minVal = float3(randRotate.x, randRotate.x, randRotate.x);
     maxVal = float3(randRotate.y, randRotate.y, randRotate.y);
     float3 randomRotate = lerp(minVal, maxVal, rawRandom);
@@ -118,15 +131,26 @@ void main(uint3 DTid : SV_DispatchThreadID)
     randomSeed = float2(particleIndex + 30.0f, translate.x + 30.0f);
     // 1. まず 0.0 ~ 1.0 の乱数を作る
     rawRandom = float3(Random(randomSeed), Random(randomSeed + 1.0), Random(randomSeed + 2.0));
-    // 2. lerpを使って、-10.0 と 10.0 の間で変換する
+    // xとyの間で変換する
     minVal = float3(randVelocity.x, randVelocity.x, randVelocity.x);
     maxVal = float3(randVelocity.y, randVelocity.y, randVelocity.y);
     float3 randomVelocity = lerp(minVal, maxVal, rawRandom);
+    
+    // *ランダム寿命* //
+    
+    // ランダム値の計算（DTid等を利用してシードをばらけさせる）
+    randomSeed = float2(particleIndex + 40.0f, lifeTime);
+    // 1. まず 0.0 ~ 1.0 の乱数を作る
+    float rawRandomTime = Random(randomSeed);
+    // xとyの間で変換する
+    float minTime = randLifeTime.x;
+    float maxTime = randLifeTime.y;
+    float randomLifeTime = lerp(minTime, maxTime, rawRandomTime);
 
     // パーティクルの要素
     gParticles[particleIndex].isActive = 1;
     gParticles[particleIndex].currentTime = currentTime;
-    gParticles[particleIndex].lifeTime = lifeTime;
+    gParticles[particleIndex].lifeTime = randomLifeTime;
     gParticles[particleIndex].velocity = randomVelocity;
     gParticles[particleIndex].color = color;
     gParticles[particleIndex].uvScale = uvScale; // UVスケール

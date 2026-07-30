@@ -68,6 +68,10 @@ public:
 		return !modelData.skinClusterData.empty();
 	}
 	SkinCluster GetSkinCluster() const { return skinCluster; }
+	Vector3 GetJointWorldPosition(const std::string& jointName, const Matrix4x4& worldMatrix) const;
+
+	// setter
+	void SetCurrentAnimation(Animation* currentAnimation) { currentAnimation_ = currentAnimation; }
 
 private:
 	// Objファイルのデータ

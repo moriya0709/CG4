@@ -685,6 +685,26 @@ void Model::ApplyAnimationBlend(Skeleton& skeleton, const Animation* currentAnim
 	}
 }
 
+Vector3 Model::GetJointWorldPosition(const std::string& jointName, const Matrix4x4& worldMatrix) const {
+	// 名前からJointを検索
+	auto it = skeleton.jointMap.find(jointName);
+	if (it != skeleton.jointMap.end()) {
+		const Joint& joint = skeleton.joints[it->second];
+
+		// スケルトン空間の座標を抽出
+		Vector3 localPos = {
+			joint.skeletonSpaceMatrix.m[3][0],
+			joint.skeletonSpaceMatrix.m[3][1],
+			joint.skeletonSpaceMatrix.m[3][2]
+		};
+
+		// ワールド座標に変換して返す
+		return VectorTransform(localPos, worldMatrix);
+	}
+	// 見つからなかった場合は原点を返す（またはエラーハンドリング）
+	return { 0.0f, 0.0f, 0.0f };
+}
+
 void Model::CreateUav() {
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
 	uavDesc.Format = DXGI_FORMAT_UNKNOWN;

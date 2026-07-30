@@ -77,6 +77,7 @@ public:
 
 	// アニメーション再生
 	void PlayAnimation(const std::string& animationName, float blendTime = 0.2f);
+	void StopAnimation();
 
 	// setter
 	void SetModel(Model* model) { model_ = model; }
@@ -87,7 +88,8 @@ public:
 	void SetCamera(Camera* camera) { camera_ = camera; }
 	void SetOutlineThickness(float thickness) { outlineData->thickness = thickness; }
 	void SetOutlineColor(Vector4 color) { outlineData->color = color; }
-	
+	Vector3 GetJointPosition(const std::string& jointName) const;
+
 	// *ライト* //
 
 	// 平行光

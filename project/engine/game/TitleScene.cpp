@@ -25,13 +25,14 @@ void TitleScene::Initialize() {
 
 	// 初期化済みの3Dオブジェクトにモデルを紐づける
 	object->SetModel("walk.gltf");
-	object->PlayAnimation("walk", 0.0f);
+	object->PlayAnimation("sneakWalk", 0.0f);
 
 	// パーティクル
 
 	particleMesh = std::make_unique<ParticleEmitter>();
 	particleMesh->Initialize("obj", transformParticle, 5, 0.1f);
 	particleMesh->SetActive("obj");
+	particleMesh->LoadParticle("Resource/particle/test.csv");
 
 	// トレイルエフェクト
 	trailEffect->Initialize("Resource/trail/trail.png", transformParticle, 1.0f, 1.5f);
@@ -70,6 +71,41 @@ void TitleScene::Update() {
 		object->PlayAnimation("sneakWalk", 1.0f);
 	}
 
+	Vector3 vector = { 0.0f,0.0f,0.0f };
+
+	if (input->PushKey(DIK_W)) {
+		objectTransform.rotate.y = 0.0f;
+		vector.z = 0.05f;
+	}
+	if (input->PushKey(DIK_S)) {
+		objectTransform.rotate.y = 3.14f;
+		vector.z = -0.05f;
+	}
+	if (input->PushKey(DIK_A)) {
+		objectTransform.rotate.y = 4.66f;
+		vector.x = -0.05f;
+	}
+	if (input->PushKey(DIK_D)) {
+		objectTransform.rotate.y = 1.52f;
+		vector.x = 0.05f;
+	}
+
+	objectTransform.translate += vector;
+
+	bool isWalk = false;
+	if (vector.x != 0.0f || vector.z != 0.0f) {
+		isWalk = true;
+	}
+
+	if (isWalk) {
+		object->PlayAnimation("sneakWalk", 0.3f);
+	} else {
+		object->PlayAnimation("walk", 0.3f);
+	}
+
+	object->SetTranslate(objectTransform.translate);
+	object->SetRotate(objectTransform.rotate);
+
 	if (input->TriggerKey(DIK_SPACE)) {
 		// ゲームプレイシーン(次シーン)を生成
 		SceneManager::GetInstance()->ChangeScene("GAMEPLAY");
@@ -81,6 +117,12 @@ void TitleScene::Update() {
 	//		tornado[i]->Update();
 	//	}
 	//}
+
+
+	// 左手の座標
+	transformParticle.translate = object->GetJointPosition("mixamorig:LeftHand");
+	particleMesh->SetTranslate(transformParticle.translate);
+
 	particleMesh->Update();
 	particleMesh->Editor();
 
