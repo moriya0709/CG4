@@ -173,9 +173,22 @@ void Object::PlayAnimation(const std::string& animationName, float blendTime) {
 	model_->PlayAnimation(animationName, blendTime);
 }
 
+void Object::StopAnimation() {
+	model_->SetCurrentAnimation(nullptr);
+}
+
 void Object::SetModel(const std::string& filePath) {
 	// モデルを検索してセットする
 	model_ = ModelManager::GetInstance()->FindModel(filePath);
+}
+
+Vector3 Object::GetJointPosition(const std::string& jointName) const {
+	if (!model_) return { 0.0f, 0.0f, 0.0f };
+
+	// 現在のワールド行列を再計算（または保持しているものを利用）
+	Matrix4x4 worldMatrix = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
+
+	return model_->GetJointWorldPosition(jointName, worldMatrix);
 }
 
 void Object::SunLight() {

@@ -66,66 +66,66 @@ void ParticleEmitter::SetActive(const std::string& name) {
 }
 
 void ParticleEmitter::SaveParticle(const std::string& filePath) {
-	//std::ofstream file(filePath, std::ios::binary);
-	//assert(file.is_open());
-	//
-	//// パーティクルの座標
-	//file << emitter->translate.x << "," << emitter->translate.y << "," << emitter->translate.z << "\n";
-	//// パーティクルのスケール
-	//file << emitter->scale.x << "," << emitter->scale.y << "," << emitter->scale.z << "\n";
-	//// パーティクルの回転
-	//file << emitter->rotate.x << "," << emitter->rotate.y << "," << emitter->rotate.z << "\n";
-	//// パーティクルの発生数
-	//file << emitter->count << "\n";
-	//// パーティクルの発生頻度
-	//file << emitter->frequency << "\n";
-	//// パーティクルのランダム座標
-	//file << emitter->isRandPosition.x << "," << emitter->isRandPosition.y << "," << emitter->isRandPosition.z << "\n";
-	//// パーティクルのランダムスケール
-	//file << emitter->isRandScale[0] << "," << emitter->isRandScale.y << "," << emitter->isRandScale.z << "\n";
-	//// パーティクルのランダム回転
-	//file << emitter->isRandRotate[0] << "," << emitter->isRandRotate.y << "," << emitter->isRandRotate.z << "\n";
-	//// パーティクルのランダム速度
-	//file << emitter->isRandVelocity[0] << "," << emitter->isRandVelocity.y << "," << emitter->isRandVelocity.z << "\n";
-	//// パーティクルの色
-	//file << emitter->color.x << "," << emitter->color.y << "," << emitter->color.z << "," << emitter->color.w << "\n";
-	//// パーティクルの最終色【追加】
-	//file << emitter->finalColor.x << "," << emitter->finalColor.y << "," << emitter->finalColor.z << "," << emitter->finalColor.w << "\n";
-	//// パーティクルの色変化速度
-	//file << emitter->colorChangeSpeed << "\n";
-	//// パーティクルの色変化
-	//file << emitter->isColorChange[0] << "," << emitter->isColorChange[1] << "," << isColorChange[2] << "," << isColorChange[3] << "\n";
-	//// パーティクルのサイズ変化
-	//file << emitter->isScaleChange[0] << "," << emitter->isScaleChange[1] << "," << isScaleChange[2] << "\n";
-	//// パーティクルの発生範囲
-	//file << emitter->distPosition.a() << "," << emitter->distPosition.b() << "\n";
-	//// パーティクルのスケール範囲
-	//file << emitter->distScale.a() << "," << emitter->distScale.b() << "\n";
-	//// パーティクルの回転範囲
-	//file << emitter->distRotate.a() << "," << emitter->distRotate.b() << "\n";
-	//// パーティクルの速度範囲
-	//file << emitter->distVelocity.a() << "," << emitter->distVelocity.b() << "\n";
-	//// パーティクルの寿命範囲
-	//file << emitter->distTime.a() << "," << emitter->distTime.b() << "\n";
-	//// パーティクルのサイズ追加数
-	//file << emitter->scaleAdd << "\n";
-	//// エミッシブ
-	//file << emitter->emissive << "\n";
-	//// ブレンドモード
-	//file << (int)blendMode << "\n";
-	//// UVスケール
-	//file << emitter->uvScale.x << "," << uvScale.y << "\n";
-	//// UVスクロール速度
-	//file << emitter->uvScrollSpeed.x << "," << uvScrollSpeed.y << "\n";
-	//// UVオフセット
-	//file << uvOffset.x << "," << uvOffset.y << "\n";
-	//// ノイズ使用
-	//file << useNoise << "\n";
-	//// ふちの色
-	//file << burnColor.x << "," << burnColor.y << "," << burnColor.z << "\n";
-	//
-	//
-	//file.close();
+	std::ofstream file(filePath, std::ios::binary);
+	assert(file.is_open());
+	
+	// パーティクルの座標
+	file << emitter->translate.x << "," << emitter->translate.y << "," << emitter->translate.z << "\n";
+	// パーティクルのスケール
+	file << emitter->scale.x << "," << emitter->scale.y << "," << emitter->scale.z << "\n";
+	// パーティクルの回転
+	file << emitter->rotate.x << "," << emitter->rotate.y << "," << emitter->rotate.z << "\n";
+	// パーティクルの発生数
+	file << emitter->count << "\n";
+	// パーティクルの発生頻度
+	file << emitter->frequency << "\n";
+	// パーティクルのランダム座標
+	file << emitter->isRandPosition.x << "," << emitter->isRandPosition.y << "," << emitter->isRandPosition.z << "\n";
+	// パーティクルのランダムスケール
+	file << emitter->isRandScale.x << "," << emitter->isRandScale.y << "," << emitter->isRandScale.z << "\n";
+	// パーティクルのランダム回転
+	file << emitter->isRandRotate.x << "," << emitter->isRandRotate.y << "," << emitter->isRandRotate.z << "\n";
+	// パーティクルのランダム速度
+	file << emitter->isRandVelocity.x << "," << emitter->isRandVelocity.y << "," << emitter->isRandVelocity.z << "\n";
+	// パーティクルの色
+	file << emitter->color.x << "," << emitter->color.y << "," << emitter->color.z << "," << emitter->color.w << "\n";
+	// パーティクルの最終色【追加】
+	file << emitter->finalColor.x << "," << emitter->finalColor.y << "," << emitter->finalColor.z << "," << emitter->finalColor.w << "\n";
+	// パーティクルの色変化速度
+	file << emitter->colorChangeSpeed << "\n";
+	// パーティクルの色変化
+	file << emitter->isColorChange.x << "," << emitter->isColorChange.y << "," << emitter->isColorChange.z << "," << emitter->isColorChange.w << "\n";
+	// パーティクルのサイズ変化
+	file << emitter->isScaleChange.x << "," << emitter->isScaleChange.y << "," << emitter->isScaleChange.z << "\n";
+	// パーティクルの発生範囲
+	file << emitter->randPosition.x << "," << emitter->randPosition.y << "\n";
+	// パーティクルのスケール範囲
+	file << emitter->randScale.x << "," << emitter->randScale.y << "\n";
+	// パーティクルの回転範囲
+	file << emitter->randRotate.x << "," << emitter->randRotate.y << "\n";
+	// パーティクルの速度範囲
+	file << emitter->randVelocity.x << "," << emitter->randVelocity.y << "\n";
+	// パーティクルの寿命範囲
+	file << distTime.a() << "," << distTime.b() << "\n";
+	// パーティクルのサイズ追加数
+	file << emitter->scaleAdd << "\n";
+	// エミッシブ
+	file << emitter->emissive << "\n";
+	// ブレンドモード
+	file << (int)blendMode << "\n";
+	// UVスケール
+	file << emitter->uvScale.x << "," << uvScale.y << "\n";
+	// UVスクロール速度
+	file << emitter->uvScrollSpeed.x << "," << uvScrollSpeed.y << "\n";
+	// UVオフセット
+	file << uvOffset.x << "," << uvOffset.y << "\n";
+	// ノイズ使用
+	file << useNoise << "\n";
+	// ふちの色
+	file << burnColor.x << "," << burnColor.y << "," << burnColor.z << "\n";
+	
+	
+	file.close();
 }
 
 void ParticleEmitter::LoadParticle(const std::string& filePath) {
@@ -164,115 +164,120 @@ void ParticleEmitter::LoadParticle(const std::string& filePath) {
 	if (std::getline(file, line)) {
 		int a, b, c;
 		sscanf_s(line.c_str(), "%d,%d,%d", &a, &b, &c);
-		isRandPosition[0] = (a != 0);
-		isRandPosition[1] = (b != 0);
-		isRandPosition[2] = (c != 0);
+		emitter->isRandPosition.x = (a != 0);
+		emitter->isRandPosition.y = (b != 0);
+		emitter->isRandPosition.z = (c != 0);
 	}
 
 	// ランダムスケール（bool）
 	if (std::getline(file, line)) {
 		int a, b, c;
 		sscanf_s(line.c_str(), "%d,%d,%d", &a, &b, &c);
-		isRandScale[0] = (a != 0);
-		isRandScale[1] = (b != 0);
-		isRandScale[2] = (c != 0);
+		emitter->isRandScale.x = (a != 0);
+		emitter->isRandScale.y = (b != 0);
+		emitter->isRandScale.z = (c != 0);
 	}
 
 	// ランダム回転（bool）
 	if (std::getline(file, line)) {
 		int a, b, c;
 		sscanf_s(line.c_str(), "%d,%d,%d", &a, &b, &c);
-		isRandRotate[0] = (a != 0);
-		isRandRotate[1] = (b != 0);
-		isRandRotate[2] = (c != 0);
+		emitter->isRandRotate.x = (a != 0);
+		emitter->isRandRotate.y = (b != 0);
+		emitter->isRandRotate.z = (c != 0);
 	}
 
 	// ランダム速度（bool）
 	if (std::getline(file, line)) {
 		int a, b, c;
 		sscanf_s(line.c_str(), "%d,%d,%d", &a, &b, &c);
-		isRandVelocity[0] = (a != 0);
-		isRandVelocity[1] = (b != 0);
-		isRandVelocity[2] = (c != 0);
+		emitter->isRandVelocity.x = (a != 0);
+		emitter->isRandVelocity.y = (b != 0);
+		emitter->isRandVelocity.z = (c != 0);
 	}
 
 	// 色
 	if (std::getline(file, line)) {
-		sscanf_s(line.c_str(), "%f,%f,%f,%f", &color.x, &color.y, &color.z, &color.w);
+		sscanf_s(line.c_str(), "%f,%f,%f,%f", &emitter->color.x, &emitter->color.y, &emitter->color.z, &emitter->color.w);
 	}
 
 	// 最終色
 	if (std::getline(file, line)) {
-		sscanf_s(line.c_str(), "%f,%f,%f,%f", &finalColor.x, &finalColor.y, &finalColor.z, &finalColor.w);
+		sscanf_s(line.c_str(), "%f,%f,%f,%f", &emitter->finalColor.x, &emitter->finalColor.y, &emitter->finalColor.z, &emitter->finalColor.w);
 	}
 
 	// 色変化速度【追加】
 	if (std::getline(file, line)) {
-		sscanf_s(line.c_str(), "%f", &colorChangeSpeed);
+		sscanf_s(line.c_str(), "%f", &emitter->colorChangeSpeed);
 	}
 
 	// 色変化（bool）
 	if (std::getline(file, line)) {
 		int a, b, c, d;
 		sscanf_s(line.c_str(), "%d,%d,%d,%d", &a, &b, &c, &d);
-		isColorChange[0] = (a != 0);
-		isColorChange[1] = (b != 0);
-		isColorChange[2] = (c != 0);
-		isColorChange[3] = (d != 0);
+		emitter->isColorChange.x = (a != 0);
+		emitter->isColorChange.y = (b != 0);
+		emitter->isColorChange.z = (c != 0);
+		emitter->isColorChange.w = (d != 0);
 	}
 
 	// サイズ変化（bool）
 	if (std::getline(file, line)) {
 		int a, b, c;
 		sscanf_s(line.c_str(), "%d,%d,%d", &a, &b, &c);
-		isScaleChange[0] = (a != 0);
-		isScaleChange[1] = (b != 0);
-		isScaleChange[2] = (c != 0);
+		emitter->isScaleChange.x = (a != 0);
+		emitter->isScaleChange.y = (b != 0);
+		emitter->isScaleChange.z = (c != 0);
 	}
 
 	// 発生範囲
 	if (std::getline(file, line)) {
-		float a, b;
-		sscanf_s(line.c_str(), "%f,%f", &a, &b);
-		distPosition = std::uniform_real_distribution<float>(a, b);
+		int a, b, c;
+		sscanf_s(line.c_str(), "%d,%d,%d", &a, &b, &c);
+		emitter->randPosition.x = (a != 0);
+		emitter->randPosition.y = (b != 0);
 	}
 
 	// スケール範囲
 	if (std::getline(file, line)) {
-		float a, b;
-		sscanf_s(line.c_str(), "%f,%f", &a, &b);
-		distScale = std::uniform_real_distribution<float>(a, b);
+		int a, b, c;
+		sscanf_s(line.c_str(), "%d,%d,%d", &a, &b, &c);
+		emitter->randScale.x = (a != 0);
+		emitter->randScale.y = (b != 0);
 	}
 
 	// 回転範囲
 	if (std::getline(file, line)) {
-		float a, b;
-		sscanf_s(line.c_str(), "%f,%f", &a, &b);
-		distRotate = std::uniform_real_distribution<float>(a, b);
+		int a, b, c;
+		sscanf_s(line.c_str(), "%d,%d,%d", &a, &b, &c);
+		emitter->randRotate.x = (a != 0);
+		emitter->randRotate.y = (b != 0);
 	}
 
 	// 速度範囲
 	if (std::getline(file, line)) {
-		float a, b;
-		sscanf_s(line.c_str(), "%f,%f", &a, &b);
-		distVelocity = std::uniform_real_distribution<float>(a, b);
+		int a, b, c;
+		sscanf_s(line.c_str(), "%d,%d,%d", &a, &b, &c);
+		emitter->randVelocity.x = (a != 0);
+		emitter->randVelocity.y = (b != 0);
 	}
 
 	// 寿命範囲
 	if (std::getline(file, line)) {
-		float a, b;
-		sscanf_s(line.c_str(), "%f,%f", &a, &b);
-		distTime = std::uniform_real_distribution<float>(a, b);
+		int a, b, c;
+		sscanf_s(line.c_str(), "%d,%d,%d", &a, &b, &c);
+		emitter->randLifeTime.x = (a != 0);
+		emitter->randLifeTime.y = (b != 0);
 	}
 
 	// サイズ追加数
 	if (std::getline(file, line)) {
-		scaleAdd = std::stof(line);
+		emitter->scaleAdd = std::stof(line);
 	}
 
 	// エミッシブの読み込み
 	if (std::getline(file, line)) {
-		emissive = std::stof(line);
+		emitter->emissive = std::stof(line);
 	}
 
 	// ブレンドモードの読み込み
@@ -282,29 +287,29 @@ void ParticleEmitter::LoadParticle(const std::string& filePath) {
 
 	// UVスケールの読み込み
 	if (std::getline(file, line)) {
-		sscanf_s(line.c_str(), "%f,%f", &uvScale.x, &uvScale.y);
+		sscanf_s(line.c_str(), "%f,%f", &emitter->uvScale.x, &emitter->uvScale.y);
 	}
 
 	// UVスクロール速度の読み込み
 	if (std::getline(file, line)) {
-		sscanf_s(line.c_str(), "%f,%f", &uvScrollSpeed.x, &uvScrollSpeed.y);
+		sscanf_s(line.c_str(), "%f,%f", &emitter->uvScrollSpeed.x, &emitter->uvScrollSpeed.y);
 	}
 
 	// UVオフセットの読み込み
 	if (std::getline(file, line)) {
-		sscanf_s(line.c_str(), "%f,%f", &uvOffset.x, &uvOffset.y);
+		sscanf_s(line.c_str(), "%f,%f", &emitter->uvOffset.x, &emitter->uvOffset.y);
 	}
 
 	// ノイズ使用の読み込み
 	if (std::getline(file, line)) {
 		int a;
 		sscanf_s(line.c_str(), "%d", &a);
-		useNoise = a;
+		emitter->useNoise = a;
 	}
 
 	// ふちの色
 	if (std::getline(file, line)) {
-		sscanf_s(line.c_str(), "%f,%f,%f", &burnColor.x, &burnColor.y, &burnColor.z);
+		sscanf_s(line.c_str(), "%f,%f,%f", &emitter->burnColor.x, &emitter->burnColor.y, &emitter->burnColor.z);
 	}
 
 	file.close();
@@ -526,7 +531,7 @@ void ParticleEmitter::Editor() {
 	// パーティクルの速度範囲
 	ImGui::SliderFloat2("randVelocity", &emitter->randVelocity.x, -100.0f, 100.0f);
 	// 寿命範囲
-	ImGui::SliderFloat2("distTime", (float*)&distTime, 0.0f, 10.0f);
+	ImGui::SliderFloat2("randLifeTime", &emitter->randLifeTime.x, 0.0f, 10.0f);
 	// パーティクルのサイズ追加数
 	ImGui::SliderFloat("scaleAdd", &emitter->scaleAdd, -0.1f, 0.1f);
 	// uvスケール

@@ -44,6 +44,11 @@ private:
 	   { 0.0f, 0.0f, 0.0f } // translate
 	};
 
+	Transform objectTransform{
+		{ 1.0f, 1.0f, 1.0f }, // scale
+	   { 0.0f, 0.0f, 0.0f }, // rotate
+	   { 0.0f, 0.0f, 0.0f } // translate
+	};
 
 	// *ライティング* //
 
