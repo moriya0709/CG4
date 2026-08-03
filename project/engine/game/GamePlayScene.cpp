@@ -11,8 +11,12 @@ void GamePlayScene::Initialize() {
 	camera->SetRotate({ cameraTransform.rotate });
 	camera->SetTranslate({ cameraTransform.translate });
 
+	railCamera = std::make_unique<RailCamera>();
+	railCamera->Initialize();
+
+
 	// カメラマネージャ登録
-	CameraManager::GetInstance()->AddCamera("main", camera.get());
+	CameraManager::GetInstance()->AddCamera("main", railCamera->camera.get());
 	CameraManager::GetInstance()->SetActiveCamera("main");
 
 	// レベル
@@ -44,6 +48,10 @@ void GamePlayScene::Update() {
 	auto input = Input::GetInstance();
 	// カメラ更新
 	CameraManager::GetInstance()->Update();
+
+	railCamera->EditorUpdate();
+	railCamera->EditorDraw();
+	railCamera->Update();
 
 	// レベルオブジェクト
 	for (auto& object : levelObjects) {
@@ -402,18 +410,18 @@ void GamePlayScene::Draw3D() {
 	}
 
 	// 3Dオブジェクト描画
-	for (int i = 0; i < 2; i++) {
-		object[i]->Draw();
-	}
+	//for (int i = 0; i < 2; i++) {
+	//	object[i]->Draw();
+	//}
 
 
 	// アウトライン描画準備
 	ObjectCommon::GetInstance()->SetOutlinePipelineState();
 
 	// アウトライン描画
-	for (int i = 0; i < 2; i++) {
-		object[i]->Draw();
-	}
+	//for (int i = 0; i < 2; i++) {
+	//	object[i]->Draw();
+	//}
 
 }
 
