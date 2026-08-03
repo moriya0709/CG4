@@ -142,6 +142,7 @@ private:
 
 	// カメラ
 	std::unique_ptr<Camera> camera = nullptr;
+	std::unique_ptr<RailCamera> railCamera = nullptr;
 	// スプライト
 	std::unique_ptr <Sprite> sprite = nullptr;
 	// 3Dオブジェクト
